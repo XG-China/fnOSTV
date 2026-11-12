@@ -1,5 +1,10 @@
 # fnOSTV Android（TV 原生客户端）
 
+> **项目来源**：本项目基于 [**XDORG-N1/fnOSTV**](https://github.com/XDORG-N1/fnOSTV) **二次开发**而来（MIT 协议）。
+> 原始项目版权归 **XDORG-N1** 所有；本仓库在其基础上针对 Android 4.4 电视做了适配与扩展
+> （双引擎播放器、IPTV 电视直播、选集/播放信息面板、稳定性修复等），改动明细见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
+> 使用、分发或再次二开时，请保留原项目的 MIT 许可文本与署名。
+
 面向 **Android 4.4 电视/盒子**的飞牛影视（fnOS）轻量原生客户端。界面全部用原生 View 手写，
 不依赖 WebView、Kotlin、Compose 或 AndroidX；播放为双引擎（电视硬解 + LibVLC 兜底），遥控器全程可操作。
 
