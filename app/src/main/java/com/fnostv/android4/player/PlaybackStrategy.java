@@ -5,15 +5,27 @@ public final class PlaybackStrategy {
     }
 
     public static PlaybackOptions initialOptions(String url, String fileName, long size, boolean preferHardwareCodec) {
+        // 服务器转码 HLS（本地 .m3u8 + 远程 1080P H.264 分片）：
+        // 片源已被服务端降质，硬解即可流畅，不需要 mkv/ts 大文件那套兼容降级参数。
+        if (isHlsPlaylist(url)) {
+            return new PlaybackOptions(
+                    PlaybackOptions.DECODER_HARDWARE,
+                    PlaybackOptions.CACHE_REMOTE,
+                    PlaybackOptions.PROFILE_STABLE,
+                    6000,
+                    2000,
+                    false,
+                    false,
+                    0,
+                    1024,
+                    1500);
+        }
         String format = extension(fileName);
-        int decoder = preferHardwareCodec ? PlaybackOptions.DECODER_HARDWARE : PlaybackOptions.DECODER_SOFTWARE;
-        if (isLegacyFormat(format)) {
-            decoder = PlaybackOptions.DECODER_SOFTWARE;
-        }
+        // 老格式（rm/avi/wmv…）在旧电视芯片上硬解基本不可用，统一软解。
+        int decoder = preferHardwareCodec && !isLegacyFormat(format)
+                ? PlaybackOptions.DECODER_HARDWARE
+                : PlaybackOptions.DECODER_SOFTWARE;
         boolean highRisk = isHighRiskFormat(format, fileName, size);
-        if (highRisk) {
-            decoder = PlaybackOptions.DECODER_SOFTWARE;
-        }
         int cache = isRemoteUrl(url) ? PlaybackOptions.CACHE_REMOTE : PlaybackOptions.CACHE_STABLE;
         int networkMs = cache == PlaybackOptions.CACHE_REMOTE ? 6000 : 3000;
         int fileMs = cache == PlaybackOptions.CACHE_REMOTE ? 3000 : 2000;
@@ -27,10 +39,10 @@ public final class PlaybackStrategy {
             fileMs = 1200;
             lowLatency = true;
         }
-        boolean fluent = shouldPreferFluent(format, fileName, size);
+        boolean fluent = highRisk;
         if (fluent) {
             networkMs = Math.max(networkMs, cache == PlaybackOptions.CACHE_REMOTE ? 8000 : 5000);
-            fileMs = Math.max(fileMs, 2500);
+            fileMs = Math.max(fileMs, 3000);
         }
         boolean fastLan = cache == PlaybackOptions.CACHE_REMOTE && lowLatency;
         int probeSizeKb = fluent ? 2048 : (fastLan ? 384 : (lowLatency ? 512 : 768));
@@ -52,8 +64,8 @@ public final class PlaybackStrategy {
         if (current == null) {
             return PlaybackOptions.forUrl("", true).withFluentFallback();
         }
-        int networkMs = Math.min(10000, Math.max(current.networkCachingMs + 2000, 6000));
-        int fileMs = Math.min(5000, Math.max(current.fileCachingMs + 1000, 3000));
+        int networkMs = Math.min(12000, Math.max(current.networkCachingMs + 3000, 8000));
+        int fileMs = Math.min(6000, Math.max(current.fileCachingMs + 2000, 4000));
         return new PlaybackOptions(
                 current.decoderMode,
                 current.cacheMode,
@@ -63,12 +75,8 @@ public final class PlaybackStrategy {
                 true,
                 true,
                 Math.max(4, current.loopFilterSkip),
-                Math.max(2048, current.probeSizeKb),
-                Math.max(2500, current.analyzeDurationMs));
-    }
-
-    private static boolean shouldPreferFluent(String format, String fileName, long size) {
-        return isHighRiskFormat(format, fileName, size);
+                Math.max(3072, current.probeSizeKb),
+                Math.max(3000, current.analyzeDurationMs));
     }
 
     private static boolean isHighRiskFormat(String format, String fileName, long size) {
@@ -82,7 +90,9 @@ public final class PlaybackStrategy {
                 || lowerName.indexOf("x265") >= 0
                 || lowerName.indexOf("2160p") >= 0
                 || lowerName.indexOf("4k") >= 0
-                || size > 4L * 1024L * 1024L * 1024L;
+                || lowerName.indexOf("3840") >= 0
+                || lowerName.indexOf("4096") >= 0
+                || size > 2L * 1024L * 1024L * 1024L;
     }
 
     private static boolean isLegacyFormat(String format) {
@@ -111,6 +121,10 @@ public final class PlaybackStrategy {
     private static boolean isRemoteUrl(String url) {
         String lower = lower(url);
         return lower.startsWith("http://") || lower.startsWith("https://") || lower.startsWith("rtsp://");
+    }
+
+    private static boolean isHlsPlaylist(String url) {
+        return lower(url).indexOf(".m3u8") >= 0;
     }
 
     private static boolean isLikelyLanUrl(String url) {

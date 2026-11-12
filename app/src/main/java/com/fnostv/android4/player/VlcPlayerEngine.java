@@ -2,6 +2,7 @@ package com.fnostv.android4.player;
 
 import android.content.Context;
 import android.net.Uri;
+import android.os.Build;
 import android.view.SurfaceHolder;
 
 import org.videolan.libvlc.LibVLC;
@@ -9,7 +10,6 @@ import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.IVLCVout;
 
-import java.util.ArrayList;
 
 public final class VlcPlayerEngine implements PlayerEngine {
     private final Context context;
@@ -24,6 +24,11 @@ public final class VlcPlayerEngine implements PlayerEngine {
 
     public VlcPlayerEngine(Context context) {
         this.context = context.getApplicationContext();
+        try {
+            libVlc = new LibVLC(this.context);
+        } catch (Throwable ex) {
+            libVlc = null;
+        }
     }
 
     @Override
@@ -79,29 +84,44 @@ public final class VlcPlayerEngine implements PlayerEngine {
 
     @Override
     public void prepare(String url, PlaybackOptions playbackOptions) {
-        PlaybackOptions playback = playbackOptions == null ? PlaybackOptions.forUrl(url, true) : playbackOptions;
-        ArrayList<String> vlcOptions = new ArrayList<String>();
-        vlcOptions.add("--network-caching=" + playback.networkCachingMs);
-        vlcOptions.add("--file-caching=" + playback.fileCachingMs);
-        vlcOptions.add("--live-caching=" + Math.max(1500, playback.networkCachingMs / 2));
-        vlcOptions.add("--clock-jitter=0");
-        vlcOptions.add("--clock-synchro=0");
-        vlcOptions.add("--http-reconnect");
-        if (playback.allowFrameDrop) {
-            vlcOptions.add("--drop-late-frames");
-            vlcOptions.add("--skip-frames");
+        PlaybackOptions playback = playbackOptions == null ? PlaybackOptions.forUrl(url, false) : playbackOptions;
+        if (libVlc == null) {
+            try {
+                libVlc = new LibVLC(context);
+            } catch (Throwable ignored) {
+                throw new RuntimeException("VLC init failed");
+            }
+        }
+        if (player == null) {
+            try {
+                player = new MediaPlayer(libVlc);
+            } catch (Throwable ignored) {
+                player = null;
+            }
         } else {
-            vlcOptions.add("--no-drop-late-frames");
-            vlcOptions.add("--no-skip-frames");
+            try {
+                player.release();
+            } catch (Throwable ignored) {
+            }
+            try {
+                player = new MediaPlayer(libVlc);
+            } catch (Throwable ignored) {
+                player = null;
+            }
         }
-        if (playback.fastDecode) {
-            vlcOptions.add("--avcodec-fast");
+        if (player == null) {
+            throw new RuntimeException("VLC player init failed");
         }
-        if (playback.loopFilterSkip > 0) {
-            vlcOptions.add("--avcodec-skiploopfilter=" + playback.loopFilterSkip);
+        // Android 4.4 的 MediaCodec/OMX 有兼容性缺陷，直接用软解；更高版本才允许硬解。
+        boolean hardwareDecoder = playback.useHardwareDecoder()
+                && Build.VERSION.SDK_INT > Build.VERSION_CODES.KITKAT;
+        // Android 4.4 避免直通音频导致音频模块失败：固定 PCM 立体声输出。
+        try {
+            player.setAudioOutput("android_audiotrack");
+            player.setAudioOutputDevice("stereo");
+            player.setAudioDigitalOutputEnabled(false);
+        } catch (Throwable ignored) {
         }
-        libVlc = new LibVLC(context, vlcOptions);
-        player = new MediaPlayer(libVlc);
         player.setEventListener(new MediaPlayer.EventListener() {
             @Override
             public void onEvent(MediaPlayer.Event event) {
@@ -111,30 +131,41 @@ public final class VlcPlayerEngine implements PlayerEngine {
         if (surfaceHolder != null) {
             attachSurface(surfaceHolder, surfaceWidth, surfaceHeight);
         }
-        Media media = new Media(libVlc, Uri.parse(url));
-        media.setHWDecoderEnabled(playback.useHardwareDecoder(), false);
-        media.addOption(":network-caching=" + playback.networkCachingMs);
-        media.addOption(":file-caching=" + playback.fileCachingMs);
-        media.addOption(":live-caching=" + Math.max(1500, playback.networkCachingMs / 2));
-        media.addOption(":clock-jitter=0");
-        media.addOption(":clock-synchro=0");
-        if (playback.allowFrameDrop) {
-            media.addOption(":drop-late-frames");
-            media.addOption(":skip-frames");
-        } else {
-            media.addOption(":no-drop-late-frames");
-            media.addOption(":no-skip-frames");
+        try {
+            Media media = new Media(libVlc, Uri.parse(url));
+            try {
+                media.setHWDecoderEnabled(hardwareDecoder, false);
+            } catch (Throwable ignored) {
+            }
+            // HLS 分片 4 秒，给足缓冲；3 秒在 WiFi 抖动时就是「一卡一卡」
+            media.addOption(":network-caching=" + Math.min(playback.networkCachingMs, 6000));
+            media.addOption(":file-caching=" + Math.min(playback.fileCachingMs, 2000));
+            media.addOption(":live-caching=" + Math.max(500, Math.min(playback.networkCachingMs, 2000) / 2));
+            media.addOption(":clock-jitter=0");
+            media.addOption(":clock-synchro=0");
+            // 只有「流畅模式」才牺牲画质（跳过去块滤波 + 不丢帧）。
+            // 默认模式必须保留去块滤波，否则高码率 H.264 会一块一块的（用户反馈的画面乱码）。
+            if (playback.profileMode == PlaybackOptions.PROFILE_FLUENT) {
+                media.addOption(":no-drop-late-frames");
+                media.addOption(":no-skip-frames");
+                media.addOption(":avcodec-skiploopfilter=48");
+            }
+            media.addOption(hardwareDecoder ? ":codec=mediacodec,iomx,all" : ":codec=avcodec");
+            media.addOption(":http-reconnect");
+            media.addOption(":aout=android_audiotrack");
+            player.setMedia(media);
+            try {
+                media.release();
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ex) {
+            throw new RuntimeException(ex);
         }
-        if (playback.fastDecode) {
-            media.addOption(":avcodec-fast");
+        try {
+            player.play();
+        } catch (Throwable ex) {
+            throw new RuntimeException(ex);
         }
-        if (playback.loopFilterSkip > 0) {
-            media.addOption(":avcodec-skiploopfilter=" + playback.loopFilterSkip);
-        }
-        media.addOption(":http-reconnect");
-        player.setMedia(media);
-        media.release();
-        player.play();
     }
 
     @Override
@@ -235,6 +266,7 @@ public final class VlcPlayerEngine implements PlayerEngine {
             return;
         }
         if (event.type == MediaPlayer.Event.Playing) {
+            logAudioState();
             if (!prepared) {
                 prepared = true;
                 listener.onPrepared(0, 0, getDuration());
@@ -252,7 +284,41 @@ public final class VlcPlayerEngine implements PlayerEngine {
             listener.onError("VLC 播放器错误");
             return;
         }
+        if (event.type == MediaPlayer.Event.EndReached) {
+            // 片尾自然结束：用于剧集/同目录多视频自动连播。
+            listener.onCompletion();
+            return;
+        }
+        if (event.type == MediaPlayer.Event.TimeChanged
+                || event.type == MediaPlayer.Event.PositionChanged) {
+            // libvlc 播放期间每 ~250ms 一次的进度心跳（267/268）。
+            // 属于正常事件，不要打日志（否则日志被刷屏，也看不出真正的问题）。
+            return;
+        }
         listener.onLog("event type=" + event.type);
+    }
+
+    /** 播放开始时记录音轨信息，便于排查"有画面没声音"。 */
+    private void logAudioState() {
+        if (player == null || listener == null) {
+            return;
+        }
+        try {
+            MediaPlayer.TrackDescription[] tracks = player.getAudioTracks();
+            StringBuilder text = new StringBuilder("audio tracks=");
+            text.append(tracks == null ? 0 : tracks.length);
+            text.append(" passthrough=").append(player.canDoPassthrough());
+            if (tracks != null) {
+                for (MediaPlayer.TrackDescription track : tracks) {
+                    if (track == null || track.id < 0) {
+                        continue;
+                    }
+                    text.append(" [").append(track.id).append(']').append(track.name);
+                }
+            }
+            listener.onLog(text.toString());
+        } catch (RuntimeException ignored) {
+        }
     }
 
     private void applyDisplayMode() {

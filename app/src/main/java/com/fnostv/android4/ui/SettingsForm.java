@@ -13,11 +13,17 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.fnostv.android4.config.ServerProfile;
-import com.fnostv.android4.net.RecentPlaybackStore;
 
+/**
+ * 首屏登录 / 服务器连接页。
+ *
+ * 只需输入 “IP:端口” 或 “域名:端口”，协议由“使用 HTTPS”开关决定，不用手写 http://。
+ * 布局刻意做得紧凑并靠上，避免电视软键盘（约占下半屏）挡住登录按钮。
+ */
 public final class SettingsForm {
     public interface Listener {
-        void onSaveRequested(ServerProfile profile);
+        /** 保存并登录。 */
+        void onLoginRequested(ServerProfile profile);
 
         void onCancelRequested();
     }
@@ -27,8 +33,10 @@ public final class SettingsForm {
     private EditText urlInput;
     private EditText usernameInput;
     private EditText passwordInput;
-    private CheckBox autoLoginInput;
+    private CheckBox httpsInput;
     private CheckBox trustSslInput;
+    private CheckBox autoLoginInput;
+    private Button loginButton;
 
     public SettingsForm(Context context, Listener listener) {
         this.context = context;
@@ -41,86 +49,74 @@ public final class SettingsForm {
 
     public View create(ServerProfile profile, String errorMessage) {
         FrameLayout root = new FrameLayout(context);
-        root.setBackgroundColor(0xFF020407);
-
-        PosterWallView posterWallView = new PosterWallView(context);
-        posterWallView.setMediaEntries(new RecentPlaybackStore(context).list());
-        root.addView(posterWallView, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT));
+        root.setBackgroundColor(FnosTheme.COLOR_APP_BG);
 
         LinearLayout panel = new LinearLayout(context);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setGravity(Gravity.CENTER_HORIZONTAL);
-        panel.setPadding(dp(48), dp(42), dp(48), dp(38));
-        panel.setBackgroundDrawable(FnosTheme.stroked(FnosTheme.COLOR_PANEL, 0xFF394353, 24, context));
-        FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(dp(448), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+        panel.setPadding(dp(40), dp(24), dp(40), dp(22));
+        panel.setBackgroundDrawable(FnosTheme.glass(context, 22));
+        FrameLayout.LayoutParams panelParams = new FrameLayout.LayoutParams(
+                dp(470), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        panelParams.topMargin = dp(56);
         root.addView(panel, panelParams);
 
+        // ── 品牌 ───────────────────────────────────────────────
         LinearLayout brand = new LinearLayout(context);
         brand.setGravity(Gravity.CENTER);
         brand.setOrientation(LinearLayout.HORIZONTAL);
-        brand.addView(new FnosLogoMarkView(context), new LinearLayout.LayoutParams(dp(54), dp(54)));
+        brand.addView(new FnosLogoMarkView(context), new LinearLayout.LayoutParams(dp(38), dp(38)));
         TextView logo = new TextView(context);
         logo.setText("fnOSTV");
         logo.setTextColor(FnosTheme.COLOR_TEXT);
-        logo.setTextSize(30);
+        logo.setTextSize(24);
+        logo.setTypeface(null, 1);
         logo.setGravity(Gravity.CENTER_VERTICAL);
-        logo.setPadding(dp(12), 0, 0, 0);
-        brand.addView(logo, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(54)));
-        panel.addView(brand, rowParams(0, 10));
+        logo.setPadding(dp(10), 0, 0, 0);
+        brand.addView(logo, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)));
+        panel.addView(brand, rowParams(0, 4));
 
         TextView subtitle = new TextView(context);
-        subtitle.setText("原生轻量影视客户端");
+        subtitle.setText("连接你的飞牛 NAS · 输入 IP 或域名加端口");
         subtitle.setTextColor(FnosTheme.COLOR_TEXT_MUTED);
-        subtitle.setTextSize(15);
+        subtitle.setTextSize(12);
         subtitle.setGravity(Gravity.CENTER);
-        panel.addView(subtitle, rowParams(0, 28));
+        panel.addView(subtitle, rowParams(0, 14));
 
         if (errorMessage != null && errorMessage.length() > 0) {
             TextView error = new TextView(context);
             error.setText(errorMessage);
-            error.setTextColor(0xFFFFD6D6);
-            error.setTextSize(14);
+            error.setTextColor(FnosTheme.isLightTheme() ? 0xFFB4232A : 0xFFFFD8D8);
+            error.setTextSize(12);
             error.setPadding(dp(12), dp(8), dp(12), dp(8));
-            error.setBackgroundDrawable(FnosTheme.rounded(FnosTheme.COLOR_ERROR, 6, context));
-            panel.addView(error, rowParams(0, 14));
+            error.setBackgroundDrawable(FnosTheme.rounded(0xFF4A1F26, 10, context));
+            panel.addView(error, rowParams(0, 12));
         }
 
-        urlInput = input("服务器地址，例如 http://192.168.1.20:5666", false);
-        urlInput.setText(profile.baseUrl);
-        panel.addView(urlInput, rowParams(0, 12));
+        // ── 表单 ───────────────────────────────────────────────
+        urlInput = input("服务器地址，如 10.0.0.40:5666", false);
+        urlInput.setText(profile.hostPort());
+        urlInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        panel.addView(urlInput, rowParams(0, 4));
+
+        LinearLayout toggles = new LinearLayout(context);
+        toggles.setOrientation(LinearLayout.HORIZONTAL);
+        toggles.setGravity(Gravity.CENTER_VERTICAL);
+        httpsInput = checkbox("使用 HTTPS", profile.useHttps());
+        toggles.addView(httpsInput, new LinearLayout.LayoutParams(0, dp(32), 1));
+        trustSslInput = checkbox("信任证书异常", profile.trustSslErrors);
+        toggles.addView(trustSslInput, new LinearLayout.LayoutParams(0, dp(32), 1));
+        panel.addView(toggles, rowParams(0, 6));
 
         usernameInput = input("用户名", false);
         usernameInput.setText(profile.username);
-        panel.addView(usernameInput, rowParams(0, 12));
+        panel.addView(usernameInput, rowParams(0, 10));
 
         passwordInput = input("密码", true);
         passwordInput.setText(profile.password);
-        panel.addView(passwordInput, rowParams(0, 12));
+        panel.addView(passwordInput, rowParams(0, 14));
 
-        LinearLayout options = new LinearLayout(context);
-        options.setOrientation(LinearLayout.HORIZONTAL);
-        options.setGravity(Gravity.CENTER_VERTICAL);
-        autoLoginInput = checkbox("保持登录", profile.autoLogin);
-        options.addView(autoLoginInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        trustSslInput = checkbox("信任 SSL 异常", profile.trustSslErrors);
-        options.addView(trustSslInput, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        panel.addView(options, rowParams(0, 20));
-
-        Button login = button("登录", true);
-        login.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                listener.onSaveRequested(readProfile());
-            }
-        });
-        panel.addView(login, rowParams(0, 12));
-
-        Button nas = button("使用 NAS 登录", false);
-        nas.setEnabled(false);
-        panel.addView(nas, rowParams(0, 10));
-
+        LinearLayout actions = new LinearLayout(context);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
         Button cancel = button("取消", false);
         cancel.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -128,10 +124,41 @@ public final class SettingsForm {
                 listener.onCancelRequested();
             }
         });
-        panel.addView(cancel, rowParams(0, 0));
+        actions.addView(cancel, new LinearLayout.LayoutParams(0, dp(46), 1));
+        loginButton = button("登录", true);
+        loginButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                listener.onLoginRequested(readProfile());
+            }
+        });
+        LinearLayout.LayoutParams loginParams = new LinearLayout.LayoutParams(0, dp(46), 1);
+        loginParams.leftMargin = dp(12);
+        actions.addView(loginButton, loginParams);
+        panel.addView(actions, rowParams(0, 0));
 
-        urlInput.requestFocus();
+        autoLoginInput = new CheckBox(context);
+        autoLoginInput.setChecked(profile.autoLogin);
+        autoLoginInput.setVisibility(View.GONE);
+
+        if (profile.hostPort().length() == 0) {
+            urlInput.requestFocus();
+        } else if (profile.password.length() == 0) {
+            passwordInput.requestFocus();
+        } else {
+            // 已有配置：默认聚焦“登录”，避免一进页面就弹软键盘。
+            loginButton.requestFocus();
+        }
         return root;
+    }
+
+    /** 登录中：禁用按钮并给出提示，避免遥控器连按重复登录。 */
+    public void setBusy(boolean busy, String message) {
+        if (loginButton != null) {
+            loginButton.setEnabled(!busy);
+            loginButton.setAlpha(busy ? 0.6f : 1f);
+            loginButton.setText(busy ? (message == null ? "正在登录…" : message) : "登录");
+        }
     }
 
     public void focusServerUrl() {
@@ -141,25 +168,37 @@ public final class SettingsForm {
     }
 
     private ServerProfile readProfile() {
+        String raw = urlInput == null ? "" : urlInput.getText().toString().trim();
+        boolean https = httpsInput != null && httpsInput.isChecked();
+        // 兼容用户直接粘贴完整地址的情况
+        if (raw.startsWith("https://")) {
+            https = true;
+            raw = raw.substring(8);
+        } else if (raw.startsWith("http://")) {
+            raw = raw.substring(7);
+        }
+        while (raw.endsWith("/")) {
+            raw = raw.substring(0, raw.length() - 1);
+        }
         return new ServerProfile(
-                urlInput.getText().toString(),
+                (https ? "https://" : "http://") + raw,
                 usernameInput.getText().toString(),
                 passwordInput.getText().toString(),
-                autoLoginInput.isChecked(),
-                trustSslInput.isChecked());
+                autoLoginInput == null || autoLoginInput.isChecked(),
+                trustSslInput != null && trustSslInput.isChecked());
     }
 
     private EditText input(String hint, boolean password) {
         EditText input = new EditText(context);
         input.setSingleLine(true);
         input.setHint(hint);
-        input.setHintTextColor(0xFF7D8794);
+        input.setHintTextColor(FnosTheme.COLOR_TEXT_DIM);
         input.setTextColor(FnosTheme.COLOR_TEXT);
-        input.setTextSize(16);
+        input.setTextSize(15);
         input.setSelectAllOnFocus(true);
         input.setPadding(dp(14), 0, dp(14), 0);
-        input.setMinHeight(dp(48));
-        input.setBackgroundDrawable(FnosTheme.stroked(0xFF20252E, 0xFF454E5D, 10, context));
+        input.setMinHeight(dp(44));
+        FocusStyler.applyField(input);
         if (password) {
             input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         } else {
@@ -171,21 +210,26 @@ public final class SettingsForm {
     private CheckBox checkbox(String text, boolean checked) {
         CheckBox checkBox = new CheckBox(context);
         checkBox.setText(text);
-        checkBox.setTextColor(FnosTheme.COLOR_TEXT_MUTED);
-        checkBox.setTextSize(13);
+        checkBox.setTextColor(FnosTheme.COLOR_TEXT_80);
+        checkBox.setTextSize(12);
         checkBox.setChecked(checked);
+        checkBox.setPadding(dp(8), 0, dp(8), 0);
+        FocusStyler.applyCheck(checkBox);
         return checkBox;
     }
 
     private Button button(String text, boolean primary) {
         Button button = new Button(context);
         button.setText(text);
-        button.setTextSize(16);
+        button.setTextSize(15);
         button.setTextColor(FnosTheme.COLOR_TEXT);
         button.setAllCaps(false);
-        button.setMinHeight(dp(54));
-        button.setBackgroundDrawable(FnosTheme.rounded(primary ? FnosTheme.COLOR_PRIMARY : FnosTheme.COLOR_CARD, 10, context));
-        FocusStyler.apply(button, primary ? FnosTheme.COLOR_PRIMARY : FnosTheme.COLOR_CARD, 0xFF4EA1FF, 10);
+        button.setMinHeight(dp(46));
+        button.setBackgroundDrawable(FnosTheme.rounded(
+                primary ? FnosTheme.COLOR_PRIMARY : FnosTheme.COLOR_CARD, 12, context));
+        FocusStyler.apply(button,
+                primary ? FnosTheme.COLOR_PRIMARY : FnosTheme.COLOR_CARD,
+                primary ? FnosTheme.COLOR_PRIMARY_FOCUSED : FnosTheme.COLOR_CARD_FOCUSED, 12);
         return button;
     }
 

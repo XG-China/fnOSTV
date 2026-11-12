@@ -10,6 +10,41 @@ public final class MediaDetailInfoParser {
     private MediaDetailInfoParser() {
     }
 
+    /** 类型 id→名称表（GET /v/api/v1/tag/genres）。 */
+    public static final class GenreTable {
+        private final java.util.Map<Integer, String> names = new java.util.HashMap<Integer, String>();
+
+        public void put(int id, String name) {
+            if (name != null && name.length() > 0) {
+                names.put(id, name);
+            }
+        }
+
+        public String nameOf(int id) {
+            String value = names.get(id);
+            return value == null ? "" : value;
+        }
+
+        /** 网页样式："动画 · 喜剧 · 家庭 · 科幻奇幻"。 */
+        public String joinNames(JSONArray ids) {
+            if (ids == null || ids.length() == 0) {
+                return "";
+            }
+            StringBuilder builder = new StringBuilder();
+            for (int i = 0; i < ids.length(); i++) {
+                String name = nameOf(ids.optInt(i, -1));
+                if (name.length() == 0) {
+                    continue;
+                }
+                if (builder.length() > 0) {
+                    builder.append(" · ");
+                }
+                builder.append(name);
+            }
+            return builder.toString();
+        }
+    }
+
     public static MediaDetailInfo parse(JSONObject response) {
         JSONObject item = detailObject(response);
         if (item == null) {
@@ -96,7 +131,7 @@ public final class MediaDetailInfoParser {
     }
 
     private static String rating(JSONObject item) {
-        String value = firstNonEmpty(item, "rating", "score", "douban_score", "tmdb_score");
+        String value = firstNonEmpty(item, "rating", "score", "douban_score", "tmdb_score", "vote_average");
         if (value.endsWith(".0")) {
             return value.substring(0, value.length() - 2);
         }
@@ -117,31 +152,34 @@ public final class MediaDetailInfoParser {
         if (value.length() > 0 && !isNumeric(value)) {
             return value;
         }
-        long duration = item.optLong("duration", -1L);
-        if (duration < 0 && isNumeric(value)) {
-            duration = Long.parseLong(value);
+        // 官方 item 接口的 duration 为文件时长（秒），网页按它显示"1 小时 31 分钟"。
+        long seconds = item.optLong("duration", -1L);
+        if (seconds < 0 && isNumeric(value)) {
+            seconds = Long.parseLong(value);
         }
-        if (duration < 0) {
-            return "";
+        if (seconds > 24L * 60L * 60L) {
+            seconds = seconds / 1000L;
         }
-        if (duration > 24L * 60L * 60L) {
-            duration = duration / 1000L;
+        if (seconds > 0) {
+            return formatMinutes(seconds / 60L);
         }
-        return formatSeconds(duration);
+        long runtimeMinutes = item.optLong("runtime", -1L);
+        if (runtimeMinutes > 0) {
+            return formatMinutes(runtimeMinutes);
+        }
+        return "";
     }
 
-    private static String formatSeconds(long seconds) {
-        long hours = seconds / 3600L;
-        long minutes = (seconds % 3600L) / 60L;
-        long remain = seconds % 60L;
+    private static String formatMinutes(long minutes) {
+        long hours = minutes / 60L;
+        long remain = minutes % 60L;
+        if (hours > 0 && remain > 0) {
+            return hours + " 小时 " + remain + " 分钟";
+        }
         if (hours > 0) {
-            return hours + ":" + two(minutes) + ":" + two(remain);
+            return hours + " 小时";
         }
-        return minutes + ":" + two(remain);
-    }
-
-    private static String two(long value) {
-        return value < 10 ? "0" + value : String.valueOf(value);
+        return remain + " 分钟";
     }
 
     private static String firstNonEmpty(JSONObject item, String... keys) {

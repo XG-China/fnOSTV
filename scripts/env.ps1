@@ -1,6 +1,12 @@
 $ProjectRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $ToolingRoot = Join-Path $ProjectRoot ".tooling"
 $JdkRoot = Join-Path $ToolingRoot "jdk\jdk-11.0.31+11"
+if (-not (Test-Path $JdkRoot)) {
+    $JdkCandidate = Get-ChildItem (Join-Path $ToolingRoot "jdk") -Directory -ErrorAction SilentlyContinue |
+        Where-Object { Test-Path (Join-Path $_.FullName "bin\javac.exe") } |
+        Select-Object -First 1
+    if ($JdkCandidate) { $JdkRoot = $JdkCandidate.FullName }
+}
 $GradleRoot = Join-Path $ToolingRoot "gradle\gradle-6.7.1"
 $AndroidSdkRoot = Join-Path $ToolingRoot "android-sdk"
 $AndroidAvdRoot = Join-Path $ToolingRoot "avd"

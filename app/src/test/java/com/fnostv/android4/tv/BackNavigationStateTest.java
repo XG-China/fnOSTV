@@ -4,29 +4,24 @@ public final class BackNavigationStateTest {
     public static void main(String[] args) {
         choosesPlayerBeforeOtherSurfaces();
         choosesDetailBeforeBrowser();
-        choosesFullscreenBeforeBrowser();
-        choosesBrowserBeforeWebHistory();
+        choosesBrowserBeforeHome();
         fallsBackToSystemWhenNothingHandlesBack();
     }
 
     private static void choosesPlayerBeforeOtherSurfaces() {
-        assertEquals(BackNavigationState.PLAYER, BackNavigationState.choose(true, true, true, true, true));
+        assertEquals(BackNavigationState.PLAYER, BackNavigationState.choose(true, true, true, true));
     }
 
     private static void choosesDetailBeforeBrowser() {
-        assertEquals(BackNavigationState.DETAIL, BackNavigationState.choose(false, true, true, true, true));
+        assertEquals(BackNavigationState.DETAIL, BackNavigationState.choose(false, true, true, true));
     }
 
-    private static void choosesFullscreenBeforeBrowser() {
-        assertEquals(BackNavigationState.FULLSCREEN, BackNavigationState.choose(false, false, true, true, true));
-    }
-
-    private static void choosesBrowserBeforeWebHistory() {
-        assertEquals(BackNavigationState.BROWSER, BackNavigationState.choose(false, false, false, true, true));
+    private static void choosesBrowserBeforeHome() {
+        assertEquals(BackNavigationState.BROWSER, BackNavigationState.choose(false, false, true, true));
     }
 
     private static void fallsBackToSystemWhenNothingHandlesBack() {
-        assertEquals(BackNavigationState.SYSTEM, BackNavigationState.choose(false, false, false, false, false));
+        assertEquals(BackNavigationState.SYSTEM, BackNavigationState.choose(false, false, false, true));
     }
 
     private static void assertEquals(BackNavigationState expected, BackNavigationState actual) {

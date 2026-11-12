@@ -9,3 +9,11 @@ keystore.properties
 .idea/
 *.apk
 *.aab
+dist/
+
+# 本地调试临时产物（抓日志、装 APK 的脚本输出等）
+/*.py
+
+# 备份包 / 源码包（体积大，不入库）
+docs/backup-*/
+docs/*.zip

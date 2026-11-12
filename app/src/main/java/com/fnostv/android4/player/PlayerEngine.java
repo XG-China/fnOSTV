@@ -16,6 +16,9 @@ public interface PlayerEngine {
 
         void onError(String reason);
 
+        /** 自然播放到片尾（区别于用户停止/切换片源）。 */
+        void onCompletion();
+
         void onLog(String message);
     }
 

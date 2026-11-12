@@ -28,6 +28,17 @@ public final class ServerProfile {
         return ProfileValidator.validate(this).isValid();
     }
 
+    /** 服务器地址去掉协议前缀，供设置页展示（例如 10.0.0.40:5666）。 */
+    public String hostPort() {
+        int index = baseUrl.indexOf("://");
+        return index < 0 ? baseUrl : baseUrl.substring(index + 3);
+    }
+
+    /** 当前地址是否使用 HTTPS。 */
+    public boolean useHttps() {
+        return baseUrl.startsWith("https://");
+    }
+
     public JSONObject toJson() throws JSONException {
         JSONObject object = new JSONObject();
         object.put("schemaVersion", schemaVersion);
@@ -69,12 +80,22 @@ public final class ServerProfile {
         if (url.length() == 0) {
             return "";
         }
-        if (!url.startsWith("http://") && !url.startsWith("https://")) {
-            url = "http://" + url;
-        }
-        while (url.endsWith("/")) {
-            url = url.substring(0, url.length() - 1);
+        // 允许只输入 "IP:端口" 或 "域名:端口"：默认补 http://，显式写了 https:// 则保留。
+        if (url.startsWith("https://")) {
+            url = "https://" + stripSlashes(url.substring(8));
+        } else if (url.startsWith("http://")) {
+            url = "http://" + stripSlashes(url.substring(7));
+        } else {
+            url = "http://" + stripSlashes(url);
         }
         return url;
+    }
+
+    private static String stripSlashes(String value) {
+        String result = value.trim();
+        while (result.endsWith("/")) {
+            result = result.substring(0, result.length() - 1);
+        }
+        return result;
     }
 }

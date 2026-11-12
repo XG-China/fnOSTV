@@ -41,21 +41,6 @@ public final class MediaIndexStore {
         return entries;
     }
 
-    public void replaceAll(List<FnosFileEntry> entries) {
-        JSONArray array = new JSONArray();
-        List<String> paths = new ArrayList<String>();
-        if (entries != null) {
-            for (int i = 0; i < entries.size() && array.length() < MAX_ITEMS; i++) {
-                FnosFileEntry entry = entries.get(i);
-                if (entry != null && entry.isVideo() && entry.path.length() > 0 && !paths.contains(entry.path)) {
-                    array.put(toJson(entry));
-                    paths.add(entry.path);
-                }
-            }
-        }
-        preferences.edit().putString(KEY_INDEX, array.toString()).apply();
-    }
-
     public void clear() {
         preferences.edit().remove(KEY_INDEX).apply();
     }

@@ -13,18 +13,41 @@ public final class HomePosterSections {
     private HomePosterSections() {
     }
 
-    public static List<HomePosterSection> from(List<FnosFileEntry> media, List<FnosFileEntry> recent, List<FnosFileEntry> favorite) {
+    /**
+     * 与网页首页一致：继续观看 + 每个媒体库一个分区（分区标题=库名，action=library:&lt;guid&gt;），
+     * 最后追加非空的我的收藏分区。
+     */
+    public static List<HomePosterSection> forLibraries(
+            List<FnosFileEntry> recent,
+            List<FnosFileEntry> favorite,
+            List<HomePosterSection> librarySections) {
         List<HomePosterSection> sections = new ArrayList<HomePosterSection>();
         List<FnosFileEntry> recentEntries = clean(recent);
         if (recentEntries.size() > 0) {
             sections.add(new HomePosterSection("继续观看", NativeHomeView.ACTION_RECENT, recentEntries, RECENT_LIMIT));
         }
+        if (librarySections != null) {
+            for (int i = 0; i < librarySections.size(); i++) {
+                HomePosterSection section = librarySections.get(i);
+                if (section != null && section.entries.size() > 0) {
+                    sections.add(section);
+                }
+            }
+        }
         List<FnosFileEntry> favoriteEntries = clean(favorite);
         if (favoriteEntries.size() > 0) {
             sections.add(new HomePosterSection("我的收藏", NativeHomeView.ACTION_FAVORITES, favoriteEntries, FAVORITE_LIMIT));
         }
-        sections.add(new HomePosterSection("影视大全", NativeHomeView.ACTION_MEDIA, clean(media), MEDIA_LIMIT));
         return sections;
+    }
+
+    /** 单个库的分区（标题=库名，action=library:&lt;guid&gt;）。 */
+    public static HomePosterSection forLibrary(String title, String guid, List<FnosFileEntry> entries) {
+        return new HomePosterSection(
+                title,
+                NativeHomeView.ACTION_LIBRARY_PREFIX + guid,
+                entries,
+                MEDIA_LIMIT);
     }
 
     private static List<FnosFileEntry> clean(List<FnosFileEntry> entries) {

@@ -75,6 +75,40 @@ final class FnosCrypto {
         }
     }
 
+    static String md5Hex(String value) throws FnosRpcException {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("MD5");
+            byte[] bytes = digest.digest(value.getBytes("UTF-8"));
+            StringBuilder builder = new StringBuilder(bytes.length * 2);
+            for (int i = 0; i < bytes.length; i++) {
+                int v = bytes[i] & 0xFF;
+                builder.append(Character.forDigit((v >> 4) & 0xF, 16));
+                builder.append(Character.forDigit(v & 0xF, 16));
+            }
+            return builder.toString();
+        } catch (Exception ex) {
+            throw new FnosRpcException("MD5 计算失败", ex);
+        }
+    }
+
+    static String sha256Hex(String value) throws FnosRpcException {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes("UTF-8"));
+            StringBuilder builder = new StringBuilder(bytes.length * 2);
+            for (int i = 0; i < bytes.length; i++) {
+                int v = bytes[i] & 0xFF;
+                if (v < 16) {
+                    builder.append('0');
+                }
+                builder.append(Integer.toHexString(v));
+            }
+            return builder.toString();
+        } catch (Exception ex) {
+            throw new FnosRpcException("SHA-256 计算失败", ex);
+        }
+    }
+
     static String hmacSha256Base64(String value, String keyBase64) throws FnosRpcException {
         try {
             Mac mac = Mac.getInstance("HmacSHA256");

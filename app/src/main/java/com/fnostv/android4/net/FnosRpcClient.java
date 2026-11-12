@@ -52,7 +52,7 @@ public final class FnosRpcClient {
         this.profile = profile;
         this.deviceId = deviceId;
         this.socketType = socketType;
-        httpClient = new OkHttpClient.Builder()
+        httpClient = HttpClients.builder(profile.trustSslErrors)
                 .readTimeout(0, TimeUnit.MILLISECONDS)
                 .connectTimeout(OPEN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .build();
@@ -114,11 +114,6 @@ public final class FnosRpcClient {
     public FnosFileList listDir(FnosSession session, String path) throws FnosRpcException {
         FnosRpcClient client = new FnosRpcClient(profile, deviceId, SOCKET_FILE);
         return client.listDirOnFileSocket(session, path);
-    }
-
-    public String downloadUrl(FnosSession session, String path) throws FnosRpcException {
-        FnosRpcClient client = new FnosRpcClient(profile, deviceId, SOCKET_FILE);
-        return client.downloadUrlOnFileSocket(session, path);
     }
 
     public List<FnosPlaybackSource> playbackSources(FnosSession session, FnosFileEntry entry) throws FnosRpcException {
@@ -280,15 +275,12 @@ public final class FnosRpcClient {
                     JSONObject response = send(signRequest(request, session.secretHex), REQUEST_TIMEOUT_SECONDS);
                     FnosFileList entries = parseMediaCenterList(response);
                     if (entries.entries.size() > 0) {
-                        Logger.d("Media center API matched req=" + candidates[i]
-                                + " count=" + entries.entries.size());
                         return entries;
                     }
                 } catch (JSONException ex) {
                     lastError = new FnosRpcException("构造影视中心请求失败", ex);
                 } catch (FnosRpcException ex) {
                     lastError = ex;
-                    Logger.d("Media center API candidate failed: " + candidates[i] + " " + ex.getMessage());
                 }
             }
             if (lastError != null) {
@@ -589,10 +581,6 @@ public final class FnosRpcClient {
         synchronized (pendingCalls) {
             pendingCalls.put(reqId, call);
         }
-        Logger.d("RPC encrypted request reqid=" + reqId
-                + " iv=" + encrypted.optString("iv")
-                + " rsaLength=" + encrypted.optString("rsa").length()
-                + " aesLength=" + encrypted.optString("aes").length());
         webSocket.send(encrypted.toString());
         return call.await(reqId, timeoutSeconds);
     }
@@ -639,10 +627,6 @@ public final class FnosRpcClient {
                 if ("pong".equals(message.optString("res"))) {
                     return;
                 }
-                Logger.d("RPC message reqid=" + message.optString("reqid")
-                        + " result=" + message.optString("result")
-                        + " errno=" + message.optString("errno")
-                        + " keys=" + message.names());
                 if (message.has("backId")) {
                     backId = message.optString("backId", backId);
                 }
@@ -672,7 +656,6 @@ public final class FnosRpcClient {
 
         @Override
         public void onMessage(WebSocket webSocket, ByteString bytes) {
-            Logger.d("RPC binary message bytes=" + bytes.size());
         }
 
         @Override

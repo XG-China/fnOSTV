@@ -21,8 +21,29 @@ import java.net.URL;
 final class PosterLoader {
     private static final int MAX_DECODE_WIDTH = 720;
     private static final int MAX_DECODE_HEIGHT = 720;
-    private final LruCache<String, Bitmap> cache = new LruCache<String, Bitmap>(18);
+    /**
+     * 缓存按"字节数"计量：详情页 backdrop 单张可解码到 1600×1600（≈10MB），
+     * 按"张数"计数会把上百 MB 的位图留在堆上，Android 4.4 电视盒必然 OOM。
+     */
+    private static final int CACHE_BYTES = Math.min(24 * 1024 * 1024,
+            Math.max(4 * 1024 * 1024, (int) (Runtime.getRuntime().maxMemory() / 6)));
+    private final LruCache<String, Bitmap> cache = new LruCache<String, Bitmap>(CACHE_BYTES) {
+        @Override
+        protected int sizeOf(String key, Bitmap value) {
+            return bitmapBytes(value);
+        }
+    };
     private String authorizationToken = "";
+
+    private static int bitmapBytes(Bitmap bitmap) {
+        if (bitmap == null) {
+            return 0;
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
+            return bitmap.getAllocationByteCount();
+        }
+        return bitmap.getRowBytes() * bitmap.getHeight();
+    }
 
     void setAuthorizationToken(String token) {
         authorizationToken = token == null ? "" : token;
@@ -34,6 +55,21 @@ final class PosterLoader {
 
     void load(String baseUrl, FnosFileEntry entry, FrameLayout frame, ImageView image, TextView fallback, View loadedOverlay) {
         String url = entry == null ? "" : FnosRestClient.posterImageUrl(baseUrl, entry.posterPath, 400);
+        startLoad(url, MAX_DECODE_WIDTH, MAX_DECODE_HEIGHT, frame, image, fallback, loadedOverlay, false);
+    }
+
+    /** 详情页通用图片（backdrop / logo）：路径取自 item 接口的 backdrops、logos 字段。 */
+    void loadPath(String baseUrl, String path, int width, int maxDecode, FrameLayout frame, ImageView image, TextView fallback) {
+        startLoad(FnosRestClient.posterImageUrl(baseUrl, path, width), maxDecode, maxDecode, frame, image, fallback, null, false);
+    }
+
+    /** 圆形头像（演职人员）。 */
+    void loadCircle(String baseUrl, String path, int width, FrameLayout frame, ImageView image, TextView fallback) {
+        startLoad(FnosRestClient.posterImageUrl(baseUrl, path, width), 240, 240, frame, image, fallback, null, true);
+    }
+
+    private void startLoad(String url, int maxWidth, int maxHeight, FrameLayout frame, ImageView image,
+                           TextView fallback, View loadedOverlay, boolean circle) {
         frame.setTag(url);
         image.setImageDrawable(null);
         image.setVisibility(View.GONE);
@@ -46,7 +82,7 @@ final class PosterLoader {
         }
         Bitmap cached = cache.get(url);
         if (cached != null) {
-            image.setImageBitmap(cached);
+            applyBitmap(image, cached, circle);
             image.setVisibility(View.VISIBLE);
             fallback.setVisibility(View.GONE);
             if (loadedOverlay != null) {
@@ -54,7 +90,16 @@ final class PosterLoader {
             }
             return;
         }
-        new PosterTask(url, authorizationToken, frame, image, fallback, loadedOverlay).execute();
+        new PosterTask(url, authorizationToken, frame, image, fallback, loadedOverlay, maxWidth, maxHeight, circle)
+                .executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+    }
+
+    private static void applyBitmap(ImageView image, Bitmap bitmap, boolean circle) {
+        if (circle) {
+            image.setImageDrawable(new CircleBitmapDrawable(bitmap));
+        } else {
+            image.setImageBitmap(bitmap);
+        }
     }
 
     private final class PosterTask extends AsyncTask<Void, Void, Bitmap> {
@@ -64,14 +109,21 @@ final class PosterLoader {
         private final ImageView image;
         private final TextView fallback;
         private final View loadedOverlay;
+        private final int maxWidth;
+        private final int maxHeight;
+        private final boolean circle;
 
-        PosterTask(String url, String authorizationToken, FrameLayout frame, ImageView image, TextView fallback, View loadedOverlay) {
+        PosterTask(String url, String authorizationToken, FrameLayout frame, ImageView image, TextView fallback,
+                   View loadedOverlay, int maxWidth, int maxHeight, boolean circle) {
             this.url = url;
             this.authorizationToken = authorizationToken == null ? "" : authorizationToken;
             this.frame = frame;
             this.image = image;
             this.fallback = fallback;
             this.loadedOverlay = loadedOverlay;
+            this.maxWidth = maxWidth;
+            this.maxHeight = maxHeight;
+            this.circle = circle;
         }
 
         @Override
@@ -102,8 +154,8 @@ final class PosterLoader {
                 options.inSampleSize = BitmapSampleSize.forBounds(
                         bounds.outWidth,
                         bounds.outHeight,
-                        MAX_DECODE_WIDTH,
-                        MAX_DECODE_HEIGHT);
+                        maxWidth,
+                        maxHeight);
                 return BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
             } catch (RuntimeException ignored) {
                 return null;
@@ -126,7 +178,7 @@ final class PosterLoader {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             byte[] buffer = new byte[8192];
             int read;
-            while ((read = stream.read(buffer)) >= 0) {
+            while ((read = stream.read(buffer)) > 0) {
                 output.write(buffer, 0, read);
             }
             return output.toByteArray();
@@ -138,7 +190,7 @@ final class PosterLoader {
                 return;
             }
             cache.put(url, bitmap);
-            image.setImageBitmap(bitmap);
+            applyBitmap(image, bitmap, circle);
             image.setVisibility(View.VISIBLE);
             fallback.setVisibility(View.GONE);
             if (loadedOverlay != null) {

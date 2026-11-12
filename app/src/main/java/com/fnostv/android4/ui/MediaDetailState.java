@@ -2,6 +2,7 @@ package com.fnostv.android4.ui;
 
 import com.fnostv.android4.net.FnosFileEntry;
 import com.fnostv.android4.net.FnosPlaybackSource;
+import com.fnostv.android4.net.FnosRestClient;
 import com.fnostv.android4.net.MediaDetailInfo;
 import com.fnostv.android4.player.PlaybackSourceSelector;
 
@@ -16,6 +17,12 @@ public final class MediaDetailState {
     public String errorMessage = "";
     public String detailError = "";
     public MediaDetailInfo detailInfo = MediaDetailInfo.empty();
+    /** 详情页进度：观看位置 / 时长（秒），来自 play/info。 */
+    public long positionSeconds;
+    public long durationSeconds;
+    public boolean hasSubtitle;
+    /** 非空表示当前播放源是服务器转码 HLS，播放期间需要周期上报进度保活。 */
+    public FnosRestClient.TranscodeSession transcode;
     private final List<FnosPlaybackSource> sources = new ArrayList<FnosPlaybackSource>();
     private int selectedSourceIndex;
 
@@ -54,16 +61,60 @@ public final class MediaDetailState {
         this.detailError = detailError == null ? "" : detailError;
     }
 
-    public List<FnosFileEntry> detailChildren() {
-        return new ArrayList<FnosFileEntry>(detailInfo.children);
+    public void setSources(List<FnosPlaybackSource> resolvedSources) {
+        setSources(resolvedSources, null);
     }
 
-    public void setSources(List<FnosPlaybackSource> resolvedSources) {
+    public void setSources(List<FnosPlaybackSource> resolvedSources, FnosRestClient.TranscodeSession transcodeSession) {
         sources.clear();
         sources.addAll(PlaybackSourceSelector.normalize(resolvedSources));
         selectedSourceIndex = PlaybackSourceSelector.clampIndex(sources, selectedSourceIndex);
+        transcode = transcodeSession;
         loadingSources = false;
         errorMessage = "";
+    }
+
+    public void setProgress(long positionSeconds, long durationSeconds, boolean hasSubtitle) {
+        this.positionSeconds = positionSeconds < 0 ? 0L : positionSeconds;
+        this.durationSeconds = durationSeconds < 0 ? 0L : durationSeconds;
+        this.hasSubtitle = hasSubtitle;
+    }
+
+    /** 观看进度比例（0..1）。 */
+    public float progressRatio() {
+        if (durationSeconds <= 0L || positionSeconds <= 0L) {
+            return 0f;
+        }
+        double ratio = (double) positionSeconds / (double) durationSeconds;
+        if (ratio <= 0d) {
+            return 0f;
+        }
+        return ratio >= 1d ? 1f : (float) ratio;
+    }
+
+    /** 网页同款"剩余 X 小时 X 分钟"。 */
+    public String remainingLabel() {
+        long remain = durationSeconds - positionSeconds;
+        if (remain <= 0 || positionSeconds <= 0) {
+            return "";
+        }
+        long minutes = remain / 60L;
+        if (minutes <= 0) {
+            minutes = 1L;
+        }
+        long hours = minutes / 60L;
+        long rest = minutes % 60L;
+        if (hours > 0 && rest > 0) {
+            return "剩余 " + hours + " 小时 " + rest + " 分钟";
+        }
+        if (hours > 0) {
+            return "剩余 " + hours + " 小时";
+        }
+        return "剩余 " + rest + " 分钟";
+    }
+
+    public boolean hasProgress() {
+        return positionSeconds > 0 && durationSeconds > positionSeconds;
     }
 
     public List<FnosPlaybackSource> sources() {

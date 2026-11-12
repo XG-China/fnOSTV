@@ -1,211 +1,123 @@
-# fnOSTV Android
+# fnOSTV Android（TV 原生客户端）
 
-fnOSTV Android 是面向旧版 Android 电视盒子和电视设备的飞牛影视轻量客户端。项目已经从早期 WebView 壳升级为原生 Java 客户端路线，在 Android 端直接实现登录、首页、媒体库、文件浏览、收藏、最近播放和内置播放器。
-
-项目参考了 [QiaoKes/fntv-electron](https://github.com/QiaoKes/fntv-electron) 的连接和使用思路，但 Android 版本不依赖 Electron 或桌面 Web 环境。
-
-## 当前版本
+面向 **Android 4.4 电视/盒子**的飞牛影视（fnOS）轻量原生客户端。界面全部用原生 View 手写，
+不依赖 WebView、Kotlin、Compose 或 AndroidX；播放为双引擎（电视硬解 + LibVLC 兜底），遥控器全程可操作。
 
 - 包名：`com.fnostv.android4`
-- 版本号：`0.1.0`
-- Version Code：`1`
-- 最低系统：Android 4.2 / API 17
-- 目标系统：Android 9 / API 28
-- 技术栈：Java Android，不使用 Kotlin、Compose 或 AndroidX
+- 版本：`1.0.0`（versionCode 2）
+- 最低系统：**Android 4.2 / API 17**（重点适配 Android 4.4 电视）
+- 编译/目标：API 28
+- 体积：release APK ≈ 16MB（只打包 `armeabi-v7a`，主要体积是 `libvlc.so`）
+- 协议：MIT
 
-## 主要能力
+---
 
-- 原生登录和 token 会话恢复。
-- fnOS RPC/WebSocket 连接，以及 REST 文件和媒体接口访问。
-- 飞牛影视风格的原生登录页、首页、设置页和线性小图标。
-- 首页入口包含首页、收藏、影视大全、分类、搜索、用户和设置。
-- 本地媒体库管理：添加、编辑、删除和扫描媒体库目录。
-- 本地媒体索引：扫描结果用于首页、影视大全、分类和搜索。
-- 影视大全稳定加载：REST 影视服务优先，本地索引兜底，再回退 RPC mediaCenter 和文件模式。
-- 文件库目录浏览、媒体文件识别、最近播放、收藏和播放入口。
-- 海报匹配和首页海报槽位展示。
-- 首页海报墙支持继续观看、收藏和影视大全分区展示，并限制每区渲染数量以照顾旧设备性能。
-- 海报解码加入采样保护，降低旧设备海报墙加载时的内存峰值。
-- 影视详情页：播放前展示格式、路径、收藏状态、播放源，以及可用的年份、评分、简介和剧集/版本数量。
-- 播放源选择：可在详情页切换可用播放源后再开始播放。
-- 内置播放器支持播放/暂停、快进/快退、进度条、倍速、画面适应/铺满和清晰度源切换。
-- 播放链路优先使用 LibVLC，失败后回退 IJKPlayer，再失败时交给外部播放器 Intent。
-- Android 4.4 x86 模拟器、安装、日志和构建脚本。
+## 界面预览
 
-## 环境准备
+| 首页 | 剧集页 |
+| --- | --- |
+| ![首页](docs/screenshots/home.png) | ![剧集页](docs/screenshots/series.png) |
 
-项目提供 Windows 脚本来准备本地 Android 构建环境：
+| 播放器（HUD） | 播放信息面板 |
+| --- | --- |
+| ![播放器](docs/screenshots/player.png) | ![播放信息](docs/screenshots/player-info.png) |
+
+- 首页：媒体库、继续观看、各分区横向卡片，全部来自服务端
+- 剧集页：对齐网页 `/v/tv/season/:guid`，季海报 + 简介 + 评分/清晰度角标 + 集数方格
+- 播放器：底部工具栏（播放类型 / 倍速 / 画面 / 清晰度），上键可用遥控器聚焦
+- 播放信息：播放类型、解码方式、片源、分辨率、格式/通道、进度、状态、缓冲（全中文）
+
+---
+
+## 功能一览
+
+- 登录：直接填 `IP:端口` 或 `域名:端口`，可勾选 **HTTPS** 与 **信任自签名证书**
+- 首页：媒体库卡片 + 继续观看 + 各媒体库分区（**全部来自服务端**，一行可左右滚动，行尾有「查看全部」）
+- 分类：全部 / 电影 / 电视节目 / 电视直播 / 其他、收藏、搜索
+- 详情页：海报、评分、年份、简介、剧集/版本、播放源切换、收藏
+- 播放：原画直连走电视硬解（4K HEVC/H.264），转码流与特殊容器走 LibVLC；失败自动回退，自动重试
+- 播放器：播放类型按钮（硬解/软解/转码）、播放信息面板（长按确认或工具栏进入）、横向选集面板
+- 选集缩略图：可视区域即时加载，滑动实时补图，缺失剧照自动兜底
+- 电视直播：支持 IPTV 播单（m3u / txt，http(s) 或本地文件），左栏固定分类（央视频道/卫视频道/电影频道/数字频道/儿童频道/地方频道/综艺频道/纪录频道）、右栏频道列表（带台标），背后直接播放；选台/掉线自动重连
+- 稳定性：电视刚重启过会自动进入「安全模式」（改用 VLC 解码），避免同一片源反复把电视拖崩
+- 设置：播放偏好（自动连播、硬件解码优先）、外观（深色/浅色/日升日落 + 卡片角标）、关于
+- 遥控器：暂停/快进快退/倍速/画面模式/清晰度/数字键跳转；上键聚焦工具栏，长按确认看播放信息
+
+## 快速开始（开发者）
 
 ```powershell
+# 1) 首次准备本地 SDK/JDK/Gradle（写入 .tooling/）
 scripts\setup-android-env.cmd
-```
 
-脚本会使用项目内 `.tooling` 目录中的 JDK 11、Gradle 6.7.1 和 Android SDK。以下内容属于本地环境或敏感配置，不应提交到 Git：
-
-- `.tooling/`
-- `local.properties`
-- `keystore.properties`
-- `signing/`
-- `app/build/`
-- `logs/`
-
-## 快速开始
-
-生成 debug APK：
-
-```powershell
+# 2) 生成 debug APK
 scripts\build-debug.cmd
-```
 
-启动本地 Android 4.4 模拟器：
-
-```powershell
-scripts\start-emulator.cmd
-```
-
-安装并启动 debug 包：
-
-```powershell
+# 3) 安装到电视/盒子（adb 需先 connect）
+adb connect 10.0.0.40:5555
 scripts\install-debug.cmd
-```
 
-查看应用日志：
-
-```powershell
+# 4) 看日志
 scripts\logcat-app.cmd
 ```
 
-## Release 构建
-
-生成 release APK：
+Release 包：
 
 ```powershell
+scripts\create-release-keystore.cmd   # 只在第一次执行，生成 signing/fnostv-release.jks
 scripts\build-release.cmd
 ```
 
-如需签名 release 包，在仓库根目录准备 `keystore.properties` 和 `signing/` 下的 keystore 文件。可使用脚本生成本地 release keystore：
+打包源码（发给别人/存档，可随时继续开发）：
 
 ```powershell
-scripts\create-release-keystore.cmd
+scripts\package-source.cmd
+# 产物：docs\fnOSTV-source-<日期>.zip（约 0.3MB，含源码/脚本/文档/签名密钥，不含 SDK 与构建产物）
 ```
 
-发布前建议至少执行一次：
+当前仓库内已放好最新源码包与成品 APK：`docs/fnOSTV-source-20261102.zip`、`docs/fnOSTV-1.0.0.apk`。
 
-```powershell
-scripts\build-debug.cmd
-scripts\build-release.cmd
-```
+> 包里**包含** `signing/`（debug/release keystore）、`keystore.properties`、`local.properties`，
+> 解压即可直接出签名包；请勿把该压缩包公开分发。
 
-## 使用流程
+> `.tooling/`、`local.properties`、`keystore.properties`、`signing/`、`app/build/` 都是本地产物，
+> 已在 `.gitignore` 中排除，不会进入源码包。
 
-1. 安装 APK 后打开 `fnOSTV`。
-2. 首次进入设置页，填写 fnOS/飞牛影视服务地址、账号和密码。
-3. 首次保存有效配置后应用会自动返回主流程，执行原生登录并保存 token。
-4. 登录成功后进入原生首页。
-5. 进入设置页的“媒体库”，添加媒体库名称、分类和目录路径。
-6. 目录路径支持每行一个，例如 `/video/Movies`。
-7. 执行“扫描媒体库”，应用会通过 fnOS 文件接口索引目录下的视频文件。
-8. 返回首页，通过影视大全、分类、搜索、收藏或继续观看浏览媒体。
-9. 点击媒体文件后进入影视详情页，可查看元数据、格式、路径、收藏状态和播放源；详情接口不可用时不影响播放。
-10. 选择播放源并确认播放后进入内置播放器。
+## 文档
 
-## 媒体库说明
+| 文档 | 内容 |
+| --- | --- |
+| [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | 电视端使用说明：安装、登录、遥控器按键、常见问题 |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发说明：架构、目录、关键流程、扩展方式、构建与调试 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | 近期重构与行为变更记录 |
+| [docs/fnOSTV-source-20261102.zip](docs/fnOSTV-source-20261102.zip) | 源码压缩包（可直接解压继续开发） |
+| [docs/fnOSTV-1.0.0.apk](docs/fnOSTV-1.0.0.apk) | 已签名的发布版 APK |
+| [docs/fnos-interface-map.md](docs/fnos-interface-map.md) | fnOS 接口梳理（历史资料） |
+| [RELEASE_NOTES.md](RELEASE_NOTES.md) | 当前版本能力与已知限制 |
+| [OPEN_SOURCE.md](OPEN_SOURCE.md) / [NOTICE](NOTICE) | 开源使用与第三方组件声明 |
 
-- 媒体库配置保存在本机，适合旧电视盒子长期稳定使用。
-- 扫描深度默认限制为 4 层，最多索引 1000 个视频，避免旧设备长时间卡顿。
-- 影视大全加载顺序为 REST 影视媒体库、REST 全部条目、本地媒体库索引、RPC mediaCenter、文件模式。
-- UI 副标题会显示当前数据来源，例如 `fnOS 影视媒体库`、`本地媒体库索引` 或 `fnOS mediaCenter 回退`。
-- 后续可继续把稳定的 fnOS mediaCenter 管理 API 接到同一套原生界面。
-
-## 播放能力
-
-默认播放链路：
-
-1. 优先使用 LibVLC 3.1.12。
-2. VLC 初始化或播放失败时自动切换到 IJKPlayer 0.8.8。
-3. IJK 硬解失败时自动切换软解。
-4. 内置播放器仍失败时，通过系统 Intent 交给外部播放器。
-
-默认播放策略：
-
-- HTTP/远程流默认 `network-caching=6000ms`。
-- 稳定模式默认 `network-caching=3000ms`。
-- 局域网/本机低风险 MP4 使用低延迟启动档位：`network-caching=2500ms`、`file-caching=1000ms`。
-- 高风险格式、HEVC、4K 或超大文件仍优先使用更保守的流畅档位和软解友好配置。
-- 默认关闭跳帧/丢帧，减少画面不连续。
-- 播放日志会输出播放器内核、格式、清晰度源、解码方式、缓存档位和缓冲次数。
-
-注意：引入 LibVLC 后，默认构建目标为 Android 4.2+。如果需要继续覆盖 Android 4.0/4.1，应新增 IJK-only 构建变体或只使用外部播放器。
-
-## 遥控器操作
-
-- 方向键：列表导航，播放时左右快进/快退。
-- 确认键：打开项目、详情页执行当前操作，或播放/暂停。
-- 返回键：关闭详情页、退出播放页或返回上一层。
-- 菜单键：详情页收藏/取消收藏，播放时切换倍速。
-- 播放/暂停键：详情页开始播放，播放时切换播放状态。
-- 上键：播放时切换画面适应/铺满。
-- 下键：播放时切换清晰度源。
-- 数字键 0-9：播放页按 0 回到开头，按 1-9 跳到 10%-90% 位置。
-
-## 排查建议
-
-播放问题建议重点关注日志中的：
-
-- `VLC preparing`
-- `VLC prepared`
-- `VLC buffering start/end`
-- `VLC fallback to IJK`
-- `IJK retry software`
-- `options=decoder=... cache=... network=...`
-
-也可以使用错误监听脚本观察运行期异常：
-
-```powershell
-scripts\watch-errors.cmd
-```
-
-## 项目结构
+## 目录结构（简述）
 
 ```text
-com.fnostv.android4
-├── config   服务器配置、校验和本地存储
-├── media    原生媒体库配置、分类、扫描和本地索引
-├── net      fnOS 登录、RPC、REST、文件库、收藏、最近播放
-├── player   播放器抽象、VLC/IJK 播放引擎、播放性能配置
-├── tv       遥控器按键分发
-├── ui       原生登录、首页、文件库、播放页、设置页、海报墙
-├── util     常量和日志
-└── web      WebView 兼容辅助能力
+app/src/main/java/com/fnostv/android4
+├── MainActivity.java        首页/列表/详情/播放的总调度
+├── SettingsActivity.java    登录与设置
+├── config/                  服务器配置、校验、持久化
+├── net/                     RPC(WebSocket)、REST、会话、收藏/最近播放
+├── media/                   影视中心网关、分类器、索引存储
+├── player/                  播放器抽象、系统硬解引擎、VLC 引擎、播放策略
+├── tv/                      遥控器按键分发与返回栈
+├── ui/                      全部原生界面与主题组件
+└── util/                    偏好、常量、日志
 ```
-
-`MainActivity` 负责原生模式的生命周期、会话恢复、页面切换和播放协调。`NativeVideoPlayerView` 只依赖 `PlayerEngine` 抽象，当前实现为 `VlcPlayerEngine` 优先、`IjkPlayerEngine` 兜底。
-
-## 测试
-
-运行当前单元测试：
-
-```powershell
-. .\scripts\env.ps1
-gradle --no-daemon testDebugUnitTest
-```
-
-重点测试覆盖媒体库分类、fnOS REST 解析、播放策略、海报采样、文件浏览标签、首页海报槽位和首页视图状态。
-
-## 相关文档
-
-- [RELEASE_NOTES.md](RELEASE_NOTES.md)：版本能力和已知限制。
-- [OPEN_SOURCE.md](OPEN_SOURCE.md)：开源使用、分发、贡献和发布要求。
-- [NOTICE](NOTICE)：项目声明和第三方组件声明。
-- [docs/fnos-interface-map.md](docs/fnos-interface-map.md)：fnOS 接口梳理。
 
 ## 已知限制
 
-- LibVLC 3.1.12 的 AAR 声明最低 API 17，因此默认构建不再覆盖 Android 4.0/4.1。
-- 当前媒体库管理优先使用本地配置和文件扫描，服务端 mediaCenter 管理 API 仍需根据实际 fnOS API 稳定性继续完善。
-- 清晰度切换依赖 fnOS 返回多播放源；没有多码率源时只能显示当前源和实际分辨率。
-- 不同旧电视盒子的硬解能力差异较大，遇到 H.265、10bit、高码率或特殊封装时仍可能需要 IJK 软解或外部播放器兜底。
+- 仅打包 `armeabi-v7a`；如需在 arm64 设备上运行请自行加回 ABI（会显著增大体积）。
+- 4K HEVC 的 **MP4** 直连会让 MTK 固件重启，已自动改为 1080P 转码；MKV 封装的 4K HEVC 可原画直连。
+- 4K H.264 转码流在 4.4 上软解跟不上，因此转码分辨率固定 1080P。
+- 收藏以本地为主，并与服务端收藏合并展示；服务端收藏的增删目前在网页端完成。
+- 服务器管理类功能（媒体库管理、任务计划、用户管理）不在 TV 端提供。
 
 ## 开源协议
 
-本项目采用 MIT License 开源，详见 [LICENSE](LICENSE)。开源使用、分发、贡献和发布要求见 [OPEN_SOURCE.md](OPEN_SOURCE.md)，项目声明和第三方组件声明见 [NOTICE](NOTICE)。
+MIT License，详见 [LICENSE](LICENSE)。第三方组件（LibVLC / OkHttp 等）声明见 [NOTICE](NOTICE)。

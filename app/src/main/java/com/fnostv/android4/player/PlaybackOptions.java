@@ -5,10 +5,8 @@ public final class PlaybackOptions {
     public static final int DECODER_HARDWARE = 1;
     public static final int DECODER_SOFTWARE = 2;
 
-    public static final int CACHE_BALANCED = 0;
     public static final int CACHE_STABLE = 1;
     public static final int CACHE_REMOTE = 2;
-
     public static final int PROFILE_STABLE = 0;
     public static final int PROFILE_FLUENT = 1;
     public static final int PROFILE_LOW_LATENCY = 2;
@@ -45,12 +43,15 @@ public final class PlaybackOptions {
     }
 
     public static PlaybackOptions forUrl(String url, boolean preferHardwareCodec) {
-        int mode = preferHardwareCodec ? DECODER_HARDWARE : DECODER_SOFTWARE;
+        int mode = DECODER_SOFTWARE;
+        if (android.os.Build.VERSION.SDK_INT > android.os.Build.VERSION_CODES.KITKAT && preferHardwareCodec) {
+            mode = DECODER_HARDWARE;
+        }
         int cache = isRemoteUrl(url) ? CACHE_REMOTE : CACHE_STABLE;
         if (cache == CACHE_REMOTE) {
-            return new PlaybackOptions(mode, cache, PROFILE_STABLE, 6000, 3000, false, false, 0);
+            return new PlaybackOptions(mode, cache, PROFILE_STABLE, 8000, 4000, true, true, 0);
         }
-        return new PlaybackOptions(mode, cache, PROFILE_STABLE, 3000, 2000, false, false, 0);
+        return new PlaybackOptions(mode, cache, PROFILE_STABLE, 4000, 3000, true, true, 0);
     }
 
     public PlaybackOptions withSoftwareDecoder() {

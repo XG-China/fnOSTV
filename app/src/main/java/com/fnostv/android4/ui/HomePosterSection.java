@@ -13,7 +13,7 @@ public final class HomePosterSection {
     public final int maxVisible;
     public final boolean hasMore;
 
-    HomePosterSection(String title, String action, List<FnosFileEntry> entries, int maxVisible) {
+    public HomePosterSection(String title, String action, List<FnosFileEntry> entries, int maxVisible) {
         this.title = title == null ? "" : title;
         this.action = action == null ? "" : action;
         this.entries = Collections.unmodifiableList(entries == null
