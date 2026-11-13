@@ -2,14 +2,14 @@
 
 > 本项目基于 [XDORG-N1/fnOSTV](https://github.com/XDORG-N1/fnOSTV) 二次开发（MIT），原项目版权归 XDORG-N1 所有。
 
-## 当前版本：1.0.0（versionCode 2）
+## 当前版本：1.0.1（versionCode 3）
 
 - 包名：`com.fnostv.android4`
-- 版本号：`1.0.0` / versionCode `2`
+- 版本号：`1.0.1` / versionCode `3`
 - 最低系统：Android 4.2 / API 17（重点适配 Android 4.4 电视）
 - 编译与目标：API 28
 - 主线：原生轻量客户端（无 WebView / Kotlin / Compose / AndroidX）
-- 成品：`docs/fnOSTV-1.0.0.apk`（release 签名，约 16MB，仅 armeabi-v7a）
+- 成品：`docs/fnOSTV-1.0.1.apk`（release 签名，约 16MB，仅 armeabi-v7a）
 
 ## 已实现功能
 

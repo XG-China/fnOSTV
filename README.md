@@ -9,7 +9,7 @@
 不依赖 WebView、Kotlin、Compose 或 AndroidX；播放为双引擎（电视硬解 + LibVLC 兜底），遥控器全程可操作。
 
 - 包名：`com.fnostv.android4`
-- 版本：`1.0.0`（versionCode 2）
+- 版本：`1.0.1`（versionCode 3）
 - 最低系统：**Android 4.2 / API 17**（重点适配 Android 4.4 电视）
 - 编译/目标：API 28
 - 体积：release APK ≈ 16MB（只打包 `armeabi-v7a`，主要体积是 `libvlc.so`）
@@ -79,7 +79,7 @@ scripts\package-source.cmd
 # 产物：docs\fnOSTV-source-<日期>.zip（约 0.3MB，含源码/脚本/文档/签名密钥，不含 SDK 与构建产物）
 ```
 
-当前仓库内已放好最新源码包与成品 APK：`docs/fnOSTV-source-20261102.zip`、`docs/fnOSTV-1.0.0.apk`。
+当前仓库内已放好最新源码包与成品 APK：`docs/fnOSTV-source-20261105.zip`、`docs/fnOSTV-1.0.1.apk`。
 
 > 包里**包含** `signing/`（debug/release keystore）、`keystore.properties`、`local.properties`，
 > 解压即可直接出签名包；请勿把该压缩包公开分发。
@@ -94,8 +94,8 @@ scripts\package-source.cmd
 | [docs/USER_GUIDE.md](docs/USER_GUIDE.md) | 电视端使用说明：安装、登录、遥控器按键、常见问题 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发说明：架构、目录、关键流程、扩展方式、构建与调试 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 近期重构与行为变更记录 |
-| [docs/fnOSTV-source-20261102.zip](docs/fnOSTV-source-20261102.zip) | 源码压缩包（可直接解压继续开发） |
-| [docs/fnOSTV-1.0.0.apk](docs/fnOSTV-1.0.0.apk) | 已签名的发布版 APK |
+| [docs/fnOSTV-source-20261105.zip](docs/fnOSTV-source-20261105.zip) | 源码压缩包（可直接解压继续开发） |
+| [docs/fnOSTV-1.0.1.apk](docs/fnOSTV-1.0.1.apk) | 已签名的发布版 APK |
 | [docs/fnos-interface-map.md](docs/fnos-interface-map.md) | fnOS 接口梳理（历史资料） |
 | [RELEASE_NOTES.md](RELEASE_NOTES.md) | 当前版本能力与已知限制 |
 | [OPEN_SOURCE.md](OPEN_SOURCE.md) / [NOTICE](NOTICE) | 开源使用与第三方组件声明 |
