@@ -946,8 +946,8 @@ public final class FnosRestClient {
         if (streams != null && (streams.videoCodec.length() > 0 || streams.audioCodec.length() > 0)) {
             boolean hardware = streams.isHardwareDecodable();
             boolean audioOk = streams.isAudioDirectPlayable();
-            // 高分辨率不再强制转码：电视的 MTK 播放器实测能吃 4K H.264 / 4K HEVC(MKV) 原画。
-            // 但 10bit 及以上的 HEVC 还没验证过，保守起见继续交给服务器转码。
+            // 电视面板是 1920x1080：4K 原画在物理上不会更清晰，反而要老 MTK 硬解 + WiFi 扛 4K 码流，
+            // 实测容易卡住/变幻灯片，甚至让系统播放器崩掉重启。统一转 1080P 最稳。
             boolean deepColor = streams.bitDepth > 8;
             // 实测：4K HEVC 的 MP4（hvc1）会让这台 MTK 电视直接重启（系统播放器一启动就崩），
             // 《安全警长啦咘啦哆》就是这种文件，必须转码。
@@ -962,7 +962,7 @@ public final class FnosRestClient {
             boolean heavyBitrate = streams.bitRate > 20000000L;
             // 1080i 隔行片源需要反交错，直连会花屏/卡顿
             boolean interlaced = streams.progressive == 0;
-            return !hardware || !audioOk || deepColor || hevcMp4Huge
+            return !hardware || !audioOk || deepColor || hevcMp4Huge || huge
                     || heavyBitrate || interlaced;
         }
         return needsTranscodeByResolution(item);
