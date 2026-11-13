@@ -163,6 +163,10 @@ public final class NativeVideoPlayerView {
     private boolean menuMode;
     /** 本次运行是否强制走 VLC（电视刚重启过时的安全模式）。 */
     public static volatile boolean safeMode = false;
+    /** 卡帧检测：播放位置长时间不动就重新起播一次。 */
+    private int lastProgressPosition = -1;
+    private long lastProgressAtMs;
+    private boolean stuckRestarted;
     /** 重建播放器后要跳到的位置；-1 表示不需要。 */
     private int restartSeekTargetMs = -1;
     /** 重建/跳转进行中，用于合并连续按键。 */
@@ -581,6 +585,9 @@ public final class NativeVideoPlayerView {
         preferHardwareCodec = entry != null && entry.prefersHardwarePlayback() && hardwareDecoderAllowed();
         liveStream = entry != null && entry.isLive();
         liveRetries = 0;
+        lastProgressPosition = -1;
+        lastProgressAtMs = 0L;
+        stuckRestarted = false;
         // 记录最后播放的条目：电视如果意外重启，下次启动时用它判断要不要进安全模式
         com.fnostv.android4.util.AppPrefs.putString(context,
                 com.fnostv.android4.util.AppPrefs.KEY_LAST_PLAY_NAME,
@@ -1809,11 +1816,38 @@ public final class NativeVideoPlayerView {
         }
         int duration = duration();
         int position = position();
+        checkStuck(position);
         if (duration > 0) {
             seekBar.setProgress(toSeekBarProgress(position, duration));
         }
         updateTimeLabel(position, duration);
         updateControlText();
+    }
+
+    /** 播放中位置 8 秒不动 = 卡帧：换 VLC 重起一次（只做一次，避免反复）。 */
+    private void checkStuck(int position) {
+        if (!prepared || currentPlayer == null || !currentPlayer.isPlaying()) {
+            lastProgressAtMs = 0L;
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (position != lastProgressPosition) {
+            lastProgressPosition = position;
+            lastProgressAtMs = now;
+            return;
+        }
+        if (lastProgressAtMs == 0L) {
+            lastProgressAtMs = now;
+            return;
+        }
+        if (now - lastProgressAtMs < 8000L || stuckRestarted) {
+            return;
+        }
+        stuckRestarted = true;
+        lastProgressAtMs = now;
+        forceVlc = true;
+        Logger.w("Playback stuck at " + position + "ms, restart with VLC");
+        restartPlayback("画面卡住，正在重新起播");
     }
 
     private void updateTimeLabel(int position, int duration) {

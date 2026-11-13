@@ -823,7 +823,8 @@ public final class FnosRestClient {
                 video == null ? 0 : video.optInt("bit_depth", 0),
                 video == null ? "" : video.optString("wrapper"),
                 video == null ? 0 : video.optInt("width", 0),
-                video == null ? 0 : video.optInt("height", 0));
+                video == null ? 0 : video.optInt("height", 0),
+                video == null ? 1 : video.optInt("progressive", 1));
     }
 
     /** 视频流码率（bps）：bit_rate 可能是数字也可能是字符串。 */
@@ -876,10 +877,12 @@ public final class FnosRestClient {
         final String wrapper;
         final int width;
         final int height;
+        /** 1=逐行，0=隔行（1080i 需要反交错，直连容易花屏/卡顿）。 */
+        final int progressive;
 
         StreamInfo(String videoCodec, String resolutionType, String audioCodec, int audioChannels,
                    String videoGuid, String audioGuid, long bitRate, int bitDepth,
-                   String wrapper, int width, int height) {
+                   String wrapper, int width, int height, int progressive) {
             this.videoCodec = videoCodec == null ? "" : videoCodec.trim().toLowerCase(java.util.Locale.US);
             this.resolutionType = resolutionType == null ? "" : resolutionType.trim().toLowerCase(java.util.Locale.US);
             this.audioCodec = audioCodec == null ? "" : audioCodec.trim().toLowerCase(java.util.Locale.US);
@@ -891,6 +894,7 @@ public final class FnosRestClient {
             this.wrapper = wrapper == null ? "" : wrapper.trim().toLowerCase(java.util.Locale.US);
             this.width = width;
             this.height = height;
+            this.progressive = progressive;
         }
 
         /** 老设备（Android 4.4 / VLC 3.x）走的是旧 IOMX 硬解通道，只认 H.264(AVC)。 */
@@ -951,7 +955,12 @@ public final class FnosRestClient {
             boolean huge = streams.width >= 2560 || streams.height >= 1440
                     || isHighResolution(streams.resolutionType);
             boolean hevcMp4Huge = hevc && mp4 && huge;
-            return !hardware || !audioOk || deepColor || hevcMp4Huge;
+            // 1080p 蓝光 remux 常见 25–40 Mbps：电视走 WiFi 直连容易卡住/变幻灯片，改走转码更稳
+            boolean heavyBitrate = streams.bitRate > 20000000L;
+            // 1080i 隔行片源需要反交错，直连会花屏/卡顿
+            boolean interlaced = streams.progressive == 0;
+            return !hardware || !audioOk || deepColor || hevcMp4Huge
+                    || heavyBitrate || interlaced;
         }
         return needsTranscodeByResolution(item);
     }
