@@ -827,9 +827,12 @@ public final class FnosRestClient {
                 video == null ? 1 : video.optInt("progressive", 1));
     }
 
-    /** 视频流码率（bps）：bit_rate 可能是数字也可能是字符串。 */
+    /** 视频流码率（bps）：服务端字段是 bps，也兼容 bit_rate / bitrate（数字或字符串）。 */
     private static long bitRateOf(JSONObject video) {
-        Object raw = video.opt("bit_rate");
+        Object raw = video.opt("bps");
+        if (raw == null) {
+            raw = video.opt("bit_rate");
+        }
         if (raw == null) {
             raw = video.opt("bitrate");
         }
