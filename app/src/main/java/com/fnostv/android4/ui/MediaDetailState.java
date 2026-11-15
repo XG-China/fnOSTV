@@ -113,8 +113,22 @@ public final class MediaDetailState {
         return "剩余 " + rest + " 分钟";
     }
 
+    /**
+     * 是否还有"没看完"的进度。已经播到片尾（剩不到 30 秒 / 超过 95%）算看完，
+     * 详情页应显示"播放"并从片头开始，而不是"继续播放"跳到片尾。
+     */
     public boolean hasProgress() {
-        return positionSeconds > 0 && durationSeconds > positionSeconds;
+        if (positionSeconds <= 0L || durationSeconds <= positionSeconds) {
+            return false;
+        }
+        if (durationSeconds > 0L) {
+            long finishThreshold = durationSeconds > 120L ? 30L : 5L;
+            if (positionSeconds >= durationSeconds - finishThreshold
+                    || positionSeconds * 100L >= durationSeconds * 95L) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public List<FnosPlaybackSource> sources() {

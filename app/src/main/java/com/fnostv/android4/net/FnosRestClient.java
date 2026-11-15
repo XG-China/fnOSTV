@@ -743,6 +743,14 @@ public final class FnosRestClient {
      * 与网页版一致改用服务器转码：POST /play/play 拿 HLS 播放列表（1080P）后再播放。</p>
      */
     public PlaybackDirect playbackDirectForItem(String guid) throws FnosRpcException {
+        return playbackDirectForItem(guid, 0L);
+    }
+
+    /**
+     * @param durationHintSeconds 条目列表里已知的时长（秒），/play/info 的 item.duration 常常是 0，
+     *                            用它可以正确判断"是否已经看完"。
+     */
+    public PlaybackDirect playbackDirectForItem(String guid, long durationHintSeconds) throws FnosRpcException {
         String itemGuid = guid == null ? "" : guid.trim();
         if (itemGuid.length() == 0) {
             throw new FnosRpcException("缺少条目 guid");
@@ -758,19 +766,18 @@ public final class FnosRestClient {
         if (mediaGuid.length() == 0) {
             throw new FnosRpcException("play/info 未返回 media_guid");
         }
-        long position = data.optLong("ts", 0L);
-        if (position < 0) {
-            position = 0L;
-        }
         JSONObject item = data.optJSONObject("item");
-        long duration = item == null ? 0L : item.optLong("duration", 0L);
-        if (duration > 24L * 60L * 60L) {
-            duration = duration / 1000L;
+        long duration = durationSecondsOf(item);
+        if (duration <= 0L) {
+            duration = normalizeDurationSeconds(durationHintSeconds);
         }
-        // 已经看到结尾（或差 30 秒以内）的片子：从头播，否则一点就播完退出
-        if (duration > 0 && position > 0 && position >= duration - 30) {
+        long position = normalizeStartSeconds(data.optLong("ts", 0L), duration);
+        // 服务端偶尔会带 is_watched，但实测看完的条目这个字段还是 0，只能当补充判据
+        if (item != null && (item.optBoolean("is_watched", false) || item.optInt("is_watched", 0) > 0)) {
             position = 0L;
         }
+        Logger.w("play start guid=" + itemGuid + " ts=" + data.optLong("ts", 0L)
+                + " duration=" + duration + " start=" + position);
         boolean hasSubtitle = data.optString("subtitle_guid").length() > 0;
         ensureToken();
         // 原画无法硬解（非 H.264 或 2K/4K）→ 服务器转码 1080P H.264（唯一可行的流畅方案）。
@@ -797,6 +804,66 @@ public final class FnosRestClient {
         // 直连播放同样要回写观看进度（网页 addRecord），否则"继续观看"一直停在 0。
         return new PlaybackDirect(url, position, duration, hasSubtitle, "原画",
                 TranscodeSession.forDirectProgress(itemGuid, mediaGuid, duration));
+    }
+
+    /** /play/info 的 item：duration 经常是 0，只有 runtime（分钟）。 */
+    private static long durationSecondsOf(JSONObject item) {
+        if (item == null) {
+            return 0L;
+        }
+        long duration = item.optLong("duration", 0L);
+        if (duration <= 0L) {
+            long runtime = item.optLong("runtime", 0L);
+            if (runtime <= 0L) {
+                runtime = item.optLong("runtime_minutes", 0L);
+            }
+            if (runtime > 0L) {
+                duration = runtime * 60L;
+            }
+        }
+        return normalizeDurationSeconds(duration);
+    }
+
+    /** 兼容秒/毫秒两种时长表示。 */
+    private static long normalizeDurationSeconds(long value) {
+        if (value <= 0L) {
+            return 0L;
+        }
+        // 超过 24 小时的"秒数"对影视条目不合理，只能是毫秒
+        if (value > 24L * 60L * 60L) {
+            value = value / 1000L;
+        }
+        return value;
+    }
+
+    /**
+     * 起播位置归一化：已经看完的条目（剩不到 30 秒、或进度已过 95%）一律从 0 开始。
+     * /play/info 的 ts 会停在片尾（甚至正好等于时长），直接用它起播就会"一点就播完"。
+     */
+    private static long normalizeStartSeconds(long position, long durationSeconds) {
+        if (position <= 0L) {
+            return 0L;
+        }
+        long positionSeconds = position;
+        // 正常进度最多只会比时长多几十秒（runtime 是分钟取整）；大出一大截才按毫秒处理
+        if (durationSeconds > 0L && positionSeconds > durationSeconds + 300L) {
+            positionSeconds = positionSeconds / 1000L;
+        }
+        if (positionSeconds < 0L) {
+            return 0L;
+        }
+        if (durationSeconds > 0L) {
+            // 超出时长（哪怕是 ms 误判后仍超出）说明记录异常，从头播
+            if (positionSeconds > durationSeconds + 60L) {
+                return 0L;
+            }
+            long finishThreshold = durationSeconds > 120L ? 30L : 5L;
+            if (positionSeconds >= durationSeconds - finishThreshold
+                    || positionSeconds * 100L >= durationSeconds * 95L) {
+                return 0L;
+            }
+        }
+        return positionSeconds;
     }
 
     /** 原画的技术流概要：GET /stream/list/<item_guid> 的默认视频/音频流，失败返回 null。 */

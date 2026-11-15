@@ -1396,7 +1396,8 @@ public final class MainActivity extends Activity implements RemoteActions, Nativ
                 + " -> " + (next == null ? "end" : next.name));
         if (next != null) {
             nativeVideoPlayerView.showHintPublic("正在播放下一集：" + next.name);
-            resolveAndPlaySources(next);
+            // 自动连播必须从片头开始，否则会沿用该集上次的进度（常常就在片尾）→ 一集接一集"秒播完"
+            resolveAndPlaySources(next, true);
             return;
         }
         nativeVideoPlayerView.hide();
@@ -2749,6 +2750,13 @@ public final class MainActivity extends Activity implements RemoteActions, Nativ
     }
 
     private void resolveAndPlaySources(final FnosFileEntry entry) {
+        resolveAndPlaySources(entry, false);
+    }
+
+    /**
+     * @param fromStart true 时忽略服务器记录的观看进度，强制从片头开始（自动连播下一集用）。
+     */
+    private void resolveAndPlaySources(final FnosFileEntry entry, final boolean fromStart) {
         showStatus("正在准备播放源...\n" + entry.name);
         new Thread(new Runnable() {
             @Override
@@ -2758,7 +2766,8 @@ public final class MainActivity extends Activity implements RemoteActions, Nativ
                     @Override
                     public void run() {
                         if (result.success) {
-                            playResolvedSources(entry, result.sources, result.positionSeconds * 1000L,
+                            long startMs = fromStart ? 0L : result.positionSeconds * 1000L;
+                            playResolvedSources(entry, result.sources, startMs,
                                     result.transcode);
                         } else {
                             showStatus(result.message);
@@ -2775,7 +2784,7 @@ public final class MainActivity extends Activity implements RemoteActions, Nativ
         if (isRestItemGuid(entry.path)) {
             try {
                 FnosRestClient rest = newRestClient();
-                FnosRestClient.PlaybackDirect direct = rest.playbackDirectForItem(entry.path);
+                FnosRestClient.PlaybackDirect direct = rest.playbackDirectForItem(entry.path, entry.durationSeconds);
                 if (direct.url.length() > 0) {
                     List<FnosPlaybackSource> sources = new ArrayList<FnosPlaybackSource>();
                     sources.add(new FnosPlaybackSource(direct.label, direct.url));
