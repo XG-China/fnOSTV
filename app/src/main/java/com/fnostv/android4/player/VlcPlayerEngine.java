@@ -143,12 +143,14 @@ public final class VlcPlayerEngine implements PlayerEngine {
             media.addOption(":live-caching=" + Math.max(500, Math.min(playback.networkCachingMs, 2000) / 2));
             media.addOption(":clock-jitter=0");
             media.addOption(":clock-synchro=0");
-            // 只有「流畅模式」才牺牲画质（跳过去块滤波 + 不丢帧）。
-            // 默认模式必须保留去块滤波，否则高码率 H.264 会一块一块的（用户反馈的画面乱码）。
+            // 只有「流畅模式」才牺牲画质（不丢帧）。去块滤波永远保留：
+            // 跳过它会让高码率 H.264 变成一块一块的（用户反馈的"花屏"）。
             if (playback.profileMode == PlaybackOptions.PROFILE_FLUENT) {
                 media.addOption(":no-drop-late-frames");
                 media.addOption(":no-skip-frames");
-                media.addOption(":avcodec-skiploopfilter=48");
+            }
+            if (playback.loopFilterSkip > 0) {
+                media.addOption(":avcodec-skiploopfilter=" + playback.loopFilterSkip);
             }
             media.addOption(hardwareDecoder ? ":codec=mediacodec,iomx,all" : ":codec=avcodec");
             media.addOption(":http-reconnect");

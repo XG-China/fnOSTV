@@ -112,6 +112,8 @@ public final class NativeVideoPlayerView {
     private int sourceIndex;
     private int pendingSeekMs = -1;
     private int pendingSeekRequestMs = -1;
+    /** 本次 seek 是否已经试过"刷新转码列表 + 重建播放器"的兜底方案。 */
+    private boolean seekRestartTried;
     private int pictureMode = MODE_FIT;
     private int videoWidth;
     private int videoHeight;
@@ -240,7 +242,7 @@ public final class NativeVideoPlayerView {
                 int current = position();
                 if (Math.abs(current - target) > 5000 && seekSettleRetries < SEEK_SETTLE_MAX_RETRIES) {
                     seekSettleRetries++;
-                    // HLS 重新起流后 VLC 有时会把时间归零，隔 2 秒补一次 seek 能把它拉回来
+                    // HLS 重新起流后 VLC 有时会把时间归零，隔 0.5 秒补一次 seek 能把它拉回来
                     if (seekSettleRetries == 4 && currentPlayer != null) {
                         try {
                             currentPlayer.seekTo(target);
@@ -251,7 +253,15 @@ public final class NativeVideoPlayerView {
                     return;
                 }
                 if (Math.abs(current - target) > 5000) {
-                    // 追了 6 秒还没到：以目标为基准继续走时间轴，别让界面归零
+                    // 转码流实在跳不过去：刷新列表 + 重建播放器兜底一次
+                    if (transcodedPlayback && !seekRestartTried) {
+                        seekRestartTried = true;
+                        pendingSeekMs = -1;
+                        seekSettleRetries = 0;
+                        requestTranscodeRestart(target);
+                        return;
+                    }
+                    // 其它情况：以目标为基准继续走时间轴，别让界面归零
                     seekFallbackMs = target;
                     seekFallbackAtMs = SystemClock.elapsedRealtime();
                 }
@@ -1252,8 +1262,15 @@ public final class NativeVideoPlayerView {
     }
 
     private void requestSeekTo(int targetMs) {
-        pendingSeekRequestMs = Math.max(0, targetMs);
+        int clampedTarget = Math.max(0, targetMs);
+        int total = duration();
+        // 不要拖到"最后一秒"：那会立刻触发播放完成 → 自动下一集
+        if (total > 3000) {
+            clampedTarget = Math.min(total - 2000, clampedTarget);
+        }
+        pendingSeekRequestMs = clampedTarget;
         seekFallbackMs = -1;
+        seekRestartTried = false;
         seeking = true;
         loadingView.setVisibility(View.VISIBLE);
         int duration = duration();
@@ -1273,13 +1290,11 @@ public final class NativeVideoPlayerView {
         int targetMs = pendingSeekRequestMs;
         pendingSeekRequestMs = -1;
         restartRetries = 0;
-        if (transcodedPlayback && currentEntry != null
-                && Math.abs(targetMs - position()) > 15000) {
-            seekOriginMs = Math.max(0, position());
-            requestTranscodeRestart(targetMs);
-            return;
-        }
+        seekRestartTried = false;
+        seekOriginMs = Math.max(0, position());
         try {
+            // 转码 HLS 的 m3u8 是完整 VOD（服务器分片已全部就绪），直接 seek 即可，
+            // 不需要每次拖动都重建 VLC —— 重建会黑屏 2~5 秒，连续按键时还会"跳来跳去"。
             if (currentPlayer != null) {
                 currentPlayer.seekTo(targetMs);
             }

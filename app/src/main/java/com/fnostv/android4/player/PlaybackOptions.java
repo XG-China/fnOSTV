@@ -62,7 +62,8 @@ public final class PlaybackOptions {
     public PlaybackOptions withFluentFallback() {
         int network = Math.max(networkCachingMs, cacheMode == CACHE_REMOTE ? 6000 : 4000);
         int file = Math.max(fileCachingMs, 2500);
-        return new PlaybackOptions(decoderMode, cacheMode, PROFILE_FLUENT, network, file, true, true, 4,
+        // 流畅模式只加大缓存、允许丢帧，绝不能跳过环路滤波（会变成一块一块的"花屏"）
+        return new PlaybackOptions(decoderMode, cacheMode, PROFILE_FLUENT, network, file, true, true, 0,
                 Math.max(probeSizeKb, 1024), Math.max(analyzeDurationMs, 1500));
     }
 

@@ -891,7 +891,29 @@ public final class FnosRestClient {
                 video == null ? "" : video.optString("wrapper"),
                 video == null ? 0 : video.optInt("width", 0),
                 video == null ? 0 : video.optInt("height", 0),
-                video == null ? 1 : video.optInt("progressive", 1));
+                video == null ? 1 : video.optInt("progressive", 1),
+                normalizedLevel(video == null ? "" : video.optString("level")));
+    }
+
+    /**
+     * 服务端 level 字段：H.264 是 "41"/"51"，HEVC 是 "120"/"150"/"153"。
+     * 统一折算成 41/51 这种一位小数的整数写法，方便比较。
+     */
+    private static int normalizedLevel(String raw) {
+        String text = raw == null ? "" : raw.trim();
+        if (text.length() == 0) {
+            return 0;
+        }
+        int value;
+        try {
+            value = Integer.parseInt(text);
+        } catch (NumberFormatException ex) {
+            return 0;
+        }
+        if (value >= 100) {
+            value = value / 3; // HEVC: 120→4.0, 123→4.1, 150→5.0, 153→5.1
+        }
+        return value;
     }
 
     /** 视频流码率（bps）：服务端字段是 bps，也兼容 bit_rate / bitrate（数字或字符串）。 */
@@ -949,10 +971,12 @@ public final class FnosRestClient {
         final int height;
         /** 1=逐行，0=隔行（1080i 需要反交错，直连容易花屏/卡顿）。 */
         final int progressive;
+        /** H.264 编码等级，已统一成 41=4.1 / 51=5.1 这种写法（HEVC 的 150 会折算成 50）。 */
+        final int level;
 
         StreamInfo(String videoCodec, String resolutionType, String audioCodec, int audioChannels,
                    String videoGuid, String audioGuid, long bitRate, int bitDepth,
-                   String wrapper, int width, int height, int progressive) {
+                   String wrapper, int width, int height, int progressive, int level) {
             this.videoCodec = videoCodec == null ? "" : videoCodec.trim().toLowerCase(java.util.Locale.US);
             this.resolutionType = resolutionType == null ? "" : resolutionType.trim().toLowerCase(java.util.Locale.US);
             this.audioCodec = audioCodec == null ? "" : audioCodec.trim().toLowerCase(java.util.Locale.US);
@@ -965,6 +989,7 @@ public final class FnosRestClient {
             this.width = width;
             this.height = height;
             this.progressive = progressive;
+            this.level = level;
         }
 
         /** 老设备（Android 4.4 / VLC 3.x）走的是旧 IOMX 硬解通道，只认 H.264(AVC)。 */
@@ -1029,8 +1054,11 @@ public final class FnosRestClient {
             boolean heavyBitrate = streams.bitRate > 20000000L;
             // 1080i 隔行片源需要反交错，直连会花屏/卡顿
             boolean interlaced = streams.progressive == 0;
+            // 等级 5.0/5.1（H.264 的 50/51、HEVC 的 150/153）：老 MTK 硬解只保证到 4.1，
+            // 超出后容易出现绿块/花屏，统一交给服务器转码
+            boolean highLevel = streams.level > 41;
             return !hardware || !audioOk || deepColor || hevcMp4Huge || huge
-                    || heavyBitrate || interlaced;
+                    || heavyBitrate || interlaced || highLevel;
         }
         return needsTranscodeByResolution(item);
     }

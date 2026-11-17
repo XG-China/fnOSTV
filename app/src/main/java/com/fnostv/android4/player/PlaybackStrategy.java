@@ -74,7 +74,7 @@ public final class PlaybackStrategy {
                 fileMs,
                 true,
                 true,
-                Math.max(4, current.loopFilterSkip),
+                0, // 不跳环路滤波：跳过会让高码率 H.264 出现明显块状花屏
                 Math.max(3072, current.probeSizeKb),
                 Math.max(3000, current.analyzeDurationMs));
     }
