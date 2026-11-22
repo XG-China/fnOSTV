@@ -30,6 +30,8 @@ import okhttp3.Response;
 
 public final class FnosRestClient {
     private static final int TIMEOUT_SECONDS = 15;
+    /** 起转码/拉 HLS 列表可能比普通接口慢得多（服务器忙时 >20 秒），单独给长超时。 */
+    private static final int LONG_TIMEOUT_SECONDS = 90;
     private static final MediaType JSON = MediaType.parse("application/json; charset=utf-8");
 
     /** 飞牛影视 web 客户端常量（与服务端 authx 签名校验一致）。 */
@@ -155,6 +157,8 @@ public final class FnosRestClient {
     private final ServerProfile profile;
     private MediaDetailInfoParser.GenreTable cachedGenreTable;
     private final OkHttpClient httpClient;
+    /** 转码相关接口专用：/play/play 要等服务器起转码，15 秒经常不够（实测被 OkHttp 499 掐断）。 */
+    private final OkHttpClient httpClientLong;
     private final File cacheDir;
     private String token;
 
@@ -168,6 +172,11 @@ public final class FnosRestClient {
         this.httpClient = HttpClients.builder(profile.trustSslErrors)
                 .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .readTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .writeTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .build();
+        this.httpClientLong = HttpClients.builder(profile.trustSslErrors)
+                .connectTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .readTimeout(LONG_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .writeTimeout(TIMEOUT_SECONDS, TimeUnit.SECONDS)
                 .build();
     }
@@ -1143,7 +1152,7 @@ public final class FnosRestClient {
                 body.put("audio_encoder", TRANSCODE_AUDIO_ENCODER);
                 body.put("channels", TRANSCODE_AUDIO_CHANNELS);
             }
-            JSONObject response = post("/play/play", body.toString());
+            JSONObject response = postLong("/play/play", body.toString());
             JSONObject data = response.optJSONObject("data");
             String playLink = data == null ? "" : data.optString("play_link");
             if (playLink.length() == 0) {
@@ -1220,7 +1229,7 @@ public final class FnosRestClient {
                 .build();
         Response response = null;
         try {
-            response = httpClient.newCall(request).execute();
+            response = httpClientLong.newCall(request).execute();
             if (!response.isSuccessful() || response.body() == null) {
                 throw new FnosRpcException("HLS 播放列表 HTTP " + response.code());
             }
@@ -1715,6 +1724,15 @@ public final class FnosRestClient {
     }
 
     private JSONObject post(String path, String body) throws FnosRpcException {
+        return post(path, body, httpClient);
+    }
+
+    /** 转码相关请求：用 90 秒读超时，避免服务器起转码慢时被 15 秒掐断。 */
+    private JSONObject postLong(String path, String body) throws FnosRpcException {
+        return post(path, body, httpClientLong);
+    }
+
+    private JSONObject post(String path, String body, OkHttpClient client) throws FnosRpcException {
         ensureToken();
         String payload = body == null ? "" : body;
         Request request = new Request.Builder()
@@ -1726,7 +1744,7 @@ public final class FnosRestClient {
                 .header("authx", authx(apiBase() + pathnameOf(path), payload))
                 .post(RequestBody.create(JSON, payload))
                 .build();
-        return execute(request);
+        return execute(request, client);
     }
 
     /**
@@ -1869,9 +1887,13 @@ public final class FnosRestClient {
 
 
     private JSONObject execute(Request request) throws FnosRpcException {
+        return execute(request, httpClient);
+    }
+
+    private JSONObject execute(Request request, OkHttpClient client) throws FnosRpcException {
         Response response = null;
         try {
-            response = httpClient.newCall(request).execute();
+            response = client.newCall(request).execute();
             String body = response.body() == null ? "" : response.body().string();
             if (!response.isSuccessful()) {
                 throw new FnosRpcException("影视 REST HTTP " + response.code());

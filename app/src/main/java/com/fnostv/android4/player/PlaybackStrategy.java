@@ -12,7 +12,7 @@ public final class PlaybackStrategy {
                     PlaybackOptions.DECODER_HARDWARE,
                     PlaybackOptions.CACHE_REMOTE,
                     PlaybackOptions.PROFILE_STABLE,
-                    6000,
+                    8000,
                     2000,
                     false,
                     false,

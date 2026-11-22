@@ -138,7 +138,7 @@ public final class VlcPlayerEngine implements PlayerEngine {
             } catch (Throwable ignored) {
             }
             // HLS 分片 4 秒，给足缓冲；3 秒在 WiFi 抖动时就是「一卡一卡」
-            media.addOption(":network-caching=" + Math.min(playback.networkCachingMs, 6000));
+            media.addOption(":network-caching=" + Math.min(playback.networkCachingMs, 10000));
             media.addOption(":file-caching=" + Math.min(playback.fileCachingMs, 2000));
             media.addOption(":live-caching=" + Math.max(500, Math.min(playback.networkCachingMs, 2000) / 2));
             media.addOption(":clock-jitter=0");

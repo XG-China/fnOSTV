@@ -54,7 +54,7 @@ public final class NativeVideoPlayerView {
     private static final int LARGE_SEEK_STEP_MS = 30000;
     private static final int CONTROL_HIDE_DELAY_MS = 5000;
     private static final int PROGRESS_INTERVAL_MS = 1000;
-    private static final int PREPARE_TIMEOUT_MS = 20000;
+    private static final int PREPARE_TIMEOUT_MS = 30000;
     /** 系统播放器（MediaPlayer）超过这个时间还没出画面就换回 VLC。 */
     private static final int SYSTEM_FIRST_FRAME_TIMEOUT_MS = 25000;
     /** 直播流掉线后的自动重连次数。 */
