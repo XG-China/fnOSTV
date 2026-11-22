@@ -1,5 +1,24 @@
 # 变更记录（近期）
 
+## 2026-11-22 1.0.5：转码 HLS 启用硬件解码（解决 2 核电视卡成 PPT）
+
+**现场证据**（电视播放剧集时）：
+
+```
+E/VLC: decoder: more than 5 seconds of late video -> dropping frame (computer too slow ?)
+User 80%  ← 双核 MT5861 被软解吃满
+```
+
+- 电视是 **2 核 MT5861** + 1.5GB 内存，Android 4.4 上 VLC 一直被强制 `:codec=avcodec`（软解）。
+- 之前只有「原画直连」走系统播放器（MTK 硬解），
+  而转码 HLS（4K/HEVC/高码率/level>4.1）全部落到 VLC 软解 → 1080P 直接卡成 PPT。
+
+**修复**：
+
+- Android 4.4 上对 **HLS（服务器转码流）启用 VLC 硬解**（`:codec=mediacodec,iomx,all`）；
+- 其它容器（MKV/MP4 本地大文件）仍保持软解，避免老 OMX 的兼容性问题；
+- 硬解失败时沿用原有逻辑自动回退软解一次。
+
 ## 2026-11-22 1.0.4：大量影片「播放失败 / 卡住」修复
 
 **证据**（fnOS nginx access log，电视 IP 10.0.0.3）：

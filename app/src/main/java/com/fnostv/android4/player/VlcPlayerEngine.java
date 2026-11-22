@@ -112,9 +112,14 @@ public final class VlcPlayerEngine implements PlayerEngine {
         if (player == null) {
             throw new RuntimeException("VLC player init failed");
         }
-        // Android 4.4 的 MediaCodec/OMX 有兼容性缺陷，直接用软解；更高版本才允许硬解。
+        // Android 4.4 的 MediaCodec/OMX 对本地大文件有兼容性缺陷，默认软解；
+        // 但「服务器转码 HLS」是标准 1080P H.264 TS，MTK 硬解完全支持，
+        // 而 2 核老电视软解 1080P 会直接卡成 PPT（VLC 日志：computer too slow）。
+        // 所以 4.4 上只对 HLS 开硬解，失败会自动回退软解。
+        boolean hls = url != null && url.toLowerCase(java.util.Locale.US).contains(".m3u8");
         boolean hardwareDecoder = playback.useHardwareDecoder()
-                && Build.VERSION.SDK_INT > Build.VERSION_CODES.KITKAT;
+                && (Build.VERSION.SDK_INT > Build.VERSION_CODES.KITKAT
+                || (Build.VERSION.SDK_INT == Build.VERSION_CODES.KITKAT && hls));
         // Android 4.4 避免直通音频导致音频模块失败：固定 PCM 立体声输出。
         try {
             player.setAudioOutput("android_audiotrack");
